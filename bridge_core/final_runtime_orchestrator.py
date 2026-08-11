@@ -40,11 +40,27 @@ class FinalRuntimeOrchestrator:
         self.reader_executor = reader_executor
         self.runtime = LocalReaderRuntime(
             reader_code=reader_code,
-            state=RuntimeState.IDLE,
+            state=RuntimeState.OFFLINE,
             session_key=None,
             last_command_revision=0,
+            error="Reader state not yet verified after process startup.",
+        )
+
+    def mark_reader_verified_idle(self):
+        if self.runtime.session_key is not None:
+            raise FinalRuntimeOrchestratorError(
+                "Cannot mark reader idle while a local runtime session exists."
+            )
+
+        self.runtime = LocalReaderRuntime(
+            reader_code=self.runtime.reader_code,
+            state=RuntimeState.IDLE,
+            session_key=None,
+            last_command_revision=self.runtime.last_command_revision,
             error=None,
         )
+
+        return self.runtime
 
     def heartbeat(self):
         return self.api_client.heartbeat(

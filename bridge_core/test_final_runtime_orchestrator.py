@@ -96,7 +96,7 @@ class FinalRuntimeOrchestratorTests(TestCase):
             "picking": "EXWS1/IN/02227",
         }
 
-    def test_reboot_starts_idle_without_resuming_reader(self):
+    def test_reboot_starts_offline_without_resuming_reader(self):
         RFIDSession.objects.create(
             external_session_key="stale-local-session",
             device=self.reader,
@@ -112,7 +112,7 @@ class FinalRuntimeOrchestratorTests(TestCase):
 
         self.assertEqual(
             runtime.runtime.state,
-            RuntimeState.IDLE,
+            RuntimeState.OFFLINE,
         )
         self.assertIsNone(
             runtime.runtime.session_key
@@ -122,7 +122,41 @@ class FinalRuntimeOrchestratorTests(TestCase):
             [],
         )
 
-    def test_heartbeat_reports_idle(self):
+    def test_initial_heartbeat_reports_offline_unverified(self):
+        self.runtime.heartbeat()
+
+        heartbeat = self.api.heartbeats[-1][0]
+
+        self.assertEqual(
+            heartbeat["reader_code"],
+            "receiving-door-01",
+        )
+        self.assertEqual(
+            heartbeat["state"],
+            "offline",
+        )
+        self.assertIsNone(
+            heartbeat["session_key"]
+        )
+        self.assertIn(
+            "not yet verified",
+            heartbeat["error"],
+        )
+
+    def test_verified_reader_can_transition_to_idle(self):
+        runtime = self.runtime.mark_reader_verified_idle()
+
+        self.assertEqual(
+            runtime.state,
+            RuntimeState.IDLE,
+        )
+        self.assertIsNone(
+            runtime.session_key,
+        )
+        self.assertIsNone(
+            runtime.error,
+        )
+
         self.runtime.heartbeat()
 
         self.assertEqual(
@@ -136,6 +170,7 @@ class FinalRuntimeOrchestratorTests(TestCase):
         )
 
     def test_start_command_creates_session_starts_reader_and_acks(self):
+        self.runtime.mark_reader_verified_idle()
         self.api.command_payloads = [
             self.start_payload()
         ]
@@ -168,6 +203,7 @@ class FinalRuntimeOrchestratorTests(TestCase):
         )
 
     def test_stop_command_stops_reader_closes_session_and_acks(self):
+        self.runtime.mark_reader_verified_idle()
         self.api.command_payloads = [
             self.start_payload()
         ]
@@ -197,6 +233,7 @@ class FinalRuntimeOrchestratorTests(TestCase):
         )
 
     def test_start_failure_fails_closed(self):
+        self.runtime.mark_reader_verified_idle()
         self.reader_executor.fail_start = True
         self.api.command_payloads = [
             self.start_payload()
@@ -214,6 +251,7 @@ class FinalRuntimeOrchestratorTests(TestCase):
         )
 
     def test_stop_failure_fails_closed(self):
+        self.runtime.mark_reader_verified_idle()
         self.api.command_payloads = [
             self.start_payload()
         ]
