@@ -1,0 +1,85 @@
+{% load static %}
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}RFID Bridge{% endblock %}</title>
+    <link rel="stylesheet" href="{% static 'bridge_core/app.css' %}">
+</head>
+<body>
+<div class="app-shell">
+    <aside class="sidebar">
+        <a class="brand" href="{% url 'bridge_core:dashboard' %}">
+            <span class="brand-mark">RF</span>
+            <span>
+                <strong>RFID Bridge</strong>
+                <small>Operations Console</small>
+            </span>
+        </a>
+
+        <nav class="nav">
+            <a href="{% url 'bridge_core:dashboard' %}">Dashboard</a>
+            <a href="{% url 'bridge_core:reader_list' %}">Readers</a>
+            <a href="{% url 'bridge_core:session_list' %}">Sessions</a>
+            <a href="{% url 'bridge_core:event_list' %}">RFID events</a>
+            <a href="{% url 'bridge_core:delivery_attempt_list' %}">
+                Delivery attempts
+            </a>
+            <a href="{% url 'bridge_core:operational_settings' %}">
+                Operational settings
+            </a>
+
+            {% if request.user.is_staff %}
+                <a href="{% url 'bridge_core:poc_control_centre' %}">
+                    System configuration
+                </a>
+                <a href="{% url 'bridge_core:odoo_integration_settings' %}">
+                    Odoo integration
+                </a>
+                <a href="/admin/">Administration</a>
+            {% endif %}
+        </nav>
+
+        <div class="sidebar-footer">
+            <span class="status-dot"></span>
+            Safe setup mode
+        </div>
+    </aside>
+
+    <div class="main-column">
+        <header class="topbar">
+            <div>
+                <p class="eyebrow">{% block eyebrow %}RFID gateway{% endblock %}</p>
+                <h1>{% block page_title %}RFID Bridge{% endblock %}</h1>
+            </div>
+
+            <div class="user-menu">
+                <a href="{% url 'password_change' %}">
+                    Change password
+                </a>
+                <span>{{ request.user.get_username }}</span>
+                <form method="post" action="{% url 'logout' %}">
+                    {% csrf_token %}
+                    <button class="button button-secondary" type="submit">
+                        Sign out
+                    </button>
+                </form>
+            </div>
+        </header>
+
+        <main class="content">
+            {% if messages %}
+                {% for message in messages %}
+                    <div class="alert alert-{{ message.tags|default:'info' }}">
+                        {{ message }}
+                    </div>
+                {% endfor %}
+            {% endif %}
+
+            {% block content %}{% endblock %}
+        </main>
+    </div>
+</div>
+</body>
+</html>

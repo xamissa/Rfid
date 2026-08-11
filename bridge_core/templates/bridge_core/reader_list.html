@@ -1,0 +1,133 @@
+{% extends "bridge_core/base.html" %}
+
+{% block title %}Readers | RFID Bridge{% endblock %}
+{% block eyebrow %}Device configuration{% endblock %}
+{% block page_title %}Reader devices{% endblock %}
+
+{% block content %}
+<section class="safety-banner">
+    <strong>Hardware contact remains blocked</strong>
+    Reader records can be prepared safely, but no physical reader connection
+    will occur while the reader backend is set to simulation and reader contact is
+    disabled.
+</section>
+
+<section class="panel">
+    <div style="display:flex;justify-content:space-between;gap:16px;align-items:center;">
+        <div>
+            <p class="eyebrow">Configured devices</p>
+            <h2 style="margin:4px 0 0;">Readers</h2>
+        </div>
+
+        <a class="button button-primary"
+           href="{% url 'bridge_core:reader_create' %}">
+            Add reader
+        </a>
+    </div>
+
+    {% if readers %}
+        <div style="overflow-x:auto;margin-top:20px;">
+            <table style="width:100%;border-collapse:collapse;">
+                <thead>
+                    <tr>
+                        <th style="text-align:left;padding:12px;border-bottom:1px solid #dfe5ed;">
+                            Code
+                        </th>
+                        <th style="text-align:left;padding:12px;border-bottom:1px solid #dfe5ed;">
+                            Name
+                        </th>
+                        <th style="text-align:left;padding:12px;border-bottom:1px solid #dfe5ed;">
+                            Role
+                        </th>
+                        <th style="text-align:left;padding:12px;border-bottom:1px solid #dfe5ed;">
+                            Connection
+                        </th>
+                        <th style="text-align:left;padding:12px;border-bottom:1px solid #dfe5ed;">
+                            Mode
+                        </th>
+                        <th style="text-align:left;padding:12px;border-bottom:1px solid #dfe5ed;">
+                            State
+                        </th>
+                        <th style="text-align:left;padding:12px;border-bottom:1px solid #dfe5ed;">
+                            Deployment
+                        </th>
+                        <th style="text-align:right;padding:12px;border-bottom:1px solid #dfe5ed;">
+                            Action
+                        </th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for reader in readers %}
+                        <tr>
+                            <td style="padding:12px;border-bottom:1px solid #edf1f5;">
+                                <strong>{{ reader.code }}</strong>
+                            </td>
+                            <td style="padding:12px;border-bottom:1px solid #edf1f5;">
+                                {{ reader.name }}
+                            </td>
+                            <td style="padding:12px;border-bottom:1px solid #edf1f5;">
+                                {{ reader.get_role_display }}
+                            </td>
+                            <td style="padding:12px;border-bottom:1px solid #edf1f5;">
+                                {% if reader.host %}
+                                    <strong>{{ reader.host }}:{{ reader.port }}</strong>
+                                    <br>
+                                    <small>Device address {{ reader.device_address }}</small>
+                                {% else %}
+                                    <span>Not configured</span>
+                                {% endif %}
+                            </td>
+                            <td style="padding:12px;border-bottom:1px solid #edf1f5;">
+                                {{ reader.get_inventory_mode_display }}
+                            </td>
+                            <td style="padding:12px;border-bottom:1px solid #edf1f5;">
+                                {% if reader.enabled %}
+                                    Enabled
+                                {% else %}
+                                    Disabled
+                                {% endif %}
+                            </td>
+
+                            <td style="padding:12px;border-bottom:1px solid #edf1f5;">
+                                {% if not reader.host %}
+                                    Missing connection
+                                {% elif reader.enabled %}
+                                    Ready
+                                {% else %}
+                                    Configured only
+                                {% endif %}
+                            </td>
+                            <td style="padding:12px;border-bottom:1px solid #edf1f5;text-align:right;">
+                                <div style="display:flex;gap:8px;justify-content:flex-end;">
+                                    {% if request.user.is_staff %}
+                                        <a class="button button-secondary"
+                                           href="{% url 'bridge_core:reader_validation' reader.id %}">
+                                            Test
+                                        </a>
+                                    {% endif %}
+
+                                    <a class="button button-secondary"
+                                       href="{% url 'bridge_core:reader_update' reader.id %}">
+                                        Edit
+                                    </a>
+                                </div>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% else %}
+        <div style="margin-top:20px;padding:28px;border:1px dashed #cfd8e4;border-radius:12px;text-align:center;">
+            <h3 style="margin-top:0;">No readers configured</h3>
+            <p>
+                Add the receiving and dispatch readers before hardware setup.
+            </p>
+            <a class="button button-primary"
+               href="{% url 'bridge_core:reader_create' %}">
+                Add first reader
+            </a>
+        </div>
+    {% endif %}
+</section>
+{% endblock %}

@@ -1,0 +1,71 @@
+{% extends "bridge_core/base.html" %}
+
+{% block title %}Operational settings | RFID Bridge{% endblock %}
+{% block eyebrow %}Worker configuration{% endblock %}
+{% block page_title %}Operational settings{% endblock %}
+
+{% block content %}
+<section class="safety-banner">
+    <strong>Non-secret settings only</strong>
+    These values control local queue and retry behaviour. Reader and Odoo
+    credentials are not stored here, and saving this form does not start the
+    worker or enable external contact.
+</section>
+
+<div class="grid grid-2">
+    <section class="panel">
+        <p class="eyebrow">Runtime behaviour</p>
+        <h2 style="margin:4px 0 20px;">Queue and retry policy</h2>
+
+        <form method="post">
+            {% csrf_token %}
+            {{ form.as_p }}
+
+            <div style="display:flex;gap:12px;align-items:center;">
+                <button class="button button-primary" type="submit">
+                    Save settings
+                </button>
+
+                <a class="button button-secondary"
+                   href="{% url 'bridge_core:dashboard' %}">
+                    Cancel
+                </a>
+            </div>
+        </form>
+    </section>
+
+    <aside class="panel">
+        <p class="eyebrow">Current configuration</p>
+        <h2 style="margin:4px 0 20px;">Operational summary</h2>
+
+        <div class="grid">
+            <article class="metric">
+                <span class="metric-label">Configuration name</span>
+                <span class="metric-value">{{ configuration.name }}</span>
+            </article>
+
+            <article class="metric">
+                <span class="metric-label">Last updated</span>
+                <span class="metric-value" style="font-size:18px;">
+                    {{ configuration.updated_at|date:"Y-m-d H:i:s T" }}
+                </span>
+            </article>
+
+            <article class="metric">
+                <span class="metric-label">Worker activation</span>
+                <span class="metric-value" style="font-size:18px;">
+                    Managed outside this page
+                </span>
+            </article>
+        </div>
+
+        <div style="margin-top:20px;padding:16px;border-radius:10px;background:#f5f7fa;">
+            <strong>Recommended handover baseline</strong>
+            <p style="margin-bottom:0;">
+                Keep the worker disabled until reader communication and the
+                Odoo delivery contract have both been tested and approved.
+            </p>
+        </div>
+    </aside>
+</div>
+{% endblock %}

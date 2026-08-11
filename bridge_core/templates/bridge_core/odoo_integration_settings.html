@@ -1,0 +1,204 @@
+{% extends "bridge_core/base.html" %}
+
+{% block title %}Odoo integration | RFID Bridge{% endblock %}
+{% block eyebrow %}External integration configuration{% endblock %}
+{% block page_title %}Odoo integration settings{% endblock %}
+
+{% block content %}
+<section class="safety-banner">
+    <strong>Configuration only</strong>
+    Saving this form does not test the connection, deliver RFID events,
+    start the worker, or bypass the gateway contact controls.
+</section>
+
+<div style="margin-bottom:16px;">
+    <a class="button button-secondary"
+       href="{% url 'bridge_core:poc_control_centre' %}">
+        Open System configuration
+    </a>
+</div>
+
+<section class="alert alert-error" style="margin-top:16px;">
+    <strong>Inventory validation</strong>
+    The RFID inventory endpoint applies Odoo inventory
+    adjustments for the configured staging location. Use it only with
+    dedicated test products, RFID lots, and an Odoo.sh staging database.
+    It is not the final receiving or dispatch workflow.
+</section>
+
+<section class="grid grid-4">
+    <article class="metric">
+        <span class="metric-label">Controlled Odoo contact</span>
+        <span class="metric-value" style="font-size:18px;">
+            {% if allow_odoo_contact %}
+                Allowed
+            {% else %}
+                Blocked
+            {% endif %}
+        </span>
+    </article>
+
+    <article class="metric">
+        <span class="metric-label">Sender backend</span>
+        <span class="metric-value" style="font-size:18px;">
+            {{ sender_backend }}
+        </span>
+    </article>
+
+    <article class="metric">
+        <span class="metric-label">Stored credential</span>
+        <span class="metric-value" style="font-size:18px;">
+            {% if configuration.has_odoo_secret %}
+                Present and encrypted
+            {% else %}
+                Not configured
+            {% endif %}
+        </span>
+    </article>
+
+    <article class="metric">
+        <span class="metric-label">Integration record</span>
+        <span class="metric-value" style="font-size:18px;">
+            {% if configuration.odoo_integration_enabled %}
+                Enabled in database
+            {% else %}
+                Disabled in database
+            {% endif %}
+        </span>
+    </article>
+</section>
+
+<div class="grid grid-2" style="margin-top:20px;">
+    <section class="panel">
+        <p class="eyebrow">Staging configuration</p>
+        <h2 style="margin:4px 0 20px;">
+            Connection and authentication
+        </h2>
+
+        <form method="post">
+            {% csrf_token %}
+            {{ form.as_p }}
+
+            <div style="display:flex;gap:12px;align-items:center;">
+                <button class="button button-primary" type="submit">
+                    Save Odoo settings
+                </button>
+
+                <a class="button button-secondary"
+                   href="{% url 'bridge_core:dashboard' %}">
+                    Cancel
+                </a>
+            </div>
+        </form>
+    </section>
+
+    <aside class="panel">
+        <p class="eyebrow">Safety contract</p>
+        <h2 style="margin:4px 0 20px;">What this page cannot do</h2>
+
+        <div class="grid">
+            <article class="metric">
+                <span class="metric-label">Connection validation</span>
+                <span class="metric-value" style="font-size:18px;">
+                    Staff-only, POST-only
+                </span>
+            </article>
+
+            <article class="metric">
+                <span class="metric-label">RFID event delivery</span>
+                <span class="metric-value" style="font-size:18px;">
+                    Not performed
+                </span>
+            </article>
+
+            <article class="metric">
+                <span class="metric-label">Worker activation</span>
+                <span class="metric-value" style="font-size:18px;">
+                    Managed outside this page
+                </span>
+            </article>
+
+            <article class="metric">
+                <span class="metric-label">Credential display</span>
+                <span class="metric-value" style="font-size:18px;">
+                    Never shown
+                </span>
+            </article>
+        </div>
+
+        <form method="post"
+              action="{% url 'bridge_core:odoo_connection_test' %}"
+              style="margin-top:20px;">
+            {% csrf_token %}
+            <button class="button button-secondary"
+                    type="submit"
+                    {% if not allow_odoo_contact %}disabled{% endif %}>
+                Validate Odoo connection
+            </button>
+        </form>
+
+        <p style="margin-top:10px;">
+            The test performs one Odoo JSON-RPC session-authentication
+            request using the configured staging database and encrypted
+            credential. It never sends an RFID payload, creates a delivery
+            attempt, applies inventory, or starts the worker.
+        </p>
+
+        {% if not allow_odoo_contact %}
+            <div class="alert alert-error" style="margin-top:20px;">
+                Odoo contact is blocked by the controlled configuration settings
+                centre. Approve controlled Odoo.sh staging contact there
+                before running a connection or inventory-count test.
+            </div>
+        {% endif %}
+
+        {% if sender_backend == "disabled" %}
+            <div class="alert" style="margin-top:20px;">
+                The sender backend remains disabled. Saving configuration
+                cannot deliver any queued RFID event.
+            </div>
+        {% endif %}
+    </aside>
+</div>
+
+<section class="panel" style="margin-top:20px;">
+    <p class="eyebrow">Deployment readiness</p>
+    <h2 style="margin:4px 0 12px;">
+        Manual inventory verification
+    </h2>
+
+    <div class="alert alert-error" style="margin-bottom:18px;">
+        This action sends RFID tags to Odoo and may apply inventory
+        adjustments at the configured staging location. Confirm that the
+        database, location, products, and RFID lots are dedicated test data.
+    </div>
+
+    <form method="post"
+          action="{% url 'bridge_core:odoo_inventory_count_poc_manual_test' %}">
+        {% csrf_token %}
+        {{ poc_manual_form.as_p }}
+
+        <button class="button button-primary"
+                type="submit"
+                {% if not allow_odoo_contact or not configuration.odoo_inventory_count_poc_enabled %}
+                    disabled
+                {% endif %}>
+            Send inventory verification request
+        </button>
+    </form>
+
+    {% if not configuration.odoo_inventory_count_poc_enabled %}
+        <p style="margin-top:12px;">
+            Save a complete staging configuration and enable the controlled
+            inventory validation before this action becomes available.
+        </p>
+    {% endif %}
+
+    {% if not allow_odoo_contact %}
+        <p style="margin-top:12px;">
+            Controlled Odoo contact is currently blocked. Enable it
+            from the staff-only System configuration before sending a request.
+        </p>
+    {% endif %}
+</section>
+{% endblock %}

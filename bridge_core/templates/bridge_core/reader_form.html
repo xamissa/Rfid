@@ -1,0 +1,30 @@
+{% extends "bridge_core/base.html" %}
+
+{% block title %}{{ page_title }} | RFID Bridge{% endblock %}
+{% block eyebrow %}Device configuration{% endblock %}
+{% block page_title %}{{ page_title }}{% endblock %}
+
+{% block content %}
+<section class="safety-banner">
+    <strong>Configuration only</strong>
+    Saving this reader does not contact hardware or start the worker.
+</section>
+
+<section class="panel" style="max-width:760px;">
+    <form method="post">
+        {% csrf_token %}
+        {{ form.as_p }}
+
+        <div style="display:flex;gap:12px;align-items:center;">
+            <button class="button button-primary" type="submit">
+                {{ submit_label }}
+            </button>
+
+            <a class="button button-secondary"
+               href="{% url 'bridge_core:reader_list' %}">
+                Cancel
+            </a>
+        </div>
+    </form>
+</section>
+{% endblock %}

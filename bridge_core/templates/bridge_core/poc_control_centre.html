@@ -1,0 +1,169 @@
+{% extends "bridge_core/base.html" %}
+
+{% block title %}System configuration | RFID Bridge{% endblock %}
+{% block eyebrow %}System configuration{% endblock %}
+{% block page_title %}System configuration{% endblock %}
+
+{% block content %}
+<section class="safety-banner">
+    <strong>Controlled system configuration</strong>
+    These controls apply only to one-shot RFID hardware and Odoo.sh staging
+    configuration actions. They do not start the worker, enable queued delivery, or
+    change the root-owned deployment environment.
+</section>
+
+<section class="grid grid-4">
+    <article class="metric">
+        <span class="metric-label">Reader backend</span>
+        <span class="metric-value metric-value-small">
+            {{ configuration.get_reader_backend_display }}
+        </span>
+    </article>
+
+    <article class="metric">
+        <span class="metric-label">Reader contact</span>
+        <span class="metric-value metric-value-small">
+            {% if configuration.poc_allow_physical_reader_contact %}
+                Approved
+            {% else %}
+                Blocked
+            {% endif %}
+        </span>
+    </article>
+
+    <article class="metric">
+        <span class="metric-label">Odoo.sh contact</span>
+        <span class="metric-value metric-value-small">
+            {% if configuration.poc_allow_odoo_contact %}
+                Approved
+            {% else %}
+                Blocked
+            {% endif %}
+        </span>
+    </article>
+
+    <article class="metric">
+        <span class="metric-label">System readiness</span>
+        <span class="metric-value metric-value-small">
+            {{ readiness.ready_count }}/{{ readiness.total_count }}
+        </span>
+    </article>
+</section>
+
+<div class="grid grid-2 section-gap">
+    <section class="panel">
+        <p class="eyebrow">External connections</p>
+        <h2 class="panel-title">Connection controls</h2>
+
+        <div class="alert alert-error">
+            Enabling either connection option permits real network traffic.
+            Odoo inventory validation requests may apply inventory adjustments
+            in the configured staging location.
+        </div>
+
+        <form method="post">
+            {% csrf_token %}
+            {{ form.as_p }}
+
+            <div class="button-row">
+                <button class="button button-primary" type="submit">
+                    Save configuration
+                </button>
+
+                <a class="button button-secondary"
+                   href="{% url 'bridge_core:dashboard' %}">
+                    Cancel
+                </a>
+            </div>
+        </form>
+
+        <div class="confirmation-help">
+            <strong>Safety confirmation</strong>
+            <code>ENABLE_CONTROLLED_POC_CONTACT</code>
+        </div>
+    </section>
+
+    <aside class="panel">
+        <p class="eyebrow">Configuration progress</p>
+        <h2 class="panel-title">Configuration checklist</h2>
+
+        {% if readiness.fully_ready %}
+            <div class="alert alert-success">
+                All configuration gates are ready for controlled
+                hardware-to-Odoo.sh validation.
+            </div>
+        {% else %}
+            <div class="alert">
+                Complete every item before the full hardware-to-Odoo.sh
+                validation process is attempted.
+            </div>
+        {% endif %}
+
+        <div class="checklist">
+            {% for check in readiness.checks %}
+                <div class="checklist-item">
+                    <span class="status-badge {% if check.ready %}status-ready{% else %}status-hold{% endif %}">
+                        {% if check.ready %}Ready{% else %}Hold{% endif %}
+                    </span>
+                    <span>
+                        <strong>{{ check.label }}</strong>
+                        <small>{{ check.area }}</small>
+                    </span>
+                </div>
+            {% endfor %}
+        </div>
+
+        <div class="button-stack">
+            <a class="button button-secondary"
+               href="{% url 'bridge_core:reader_list' %}">
+                Configure RFID readers
+            </a>
+
+            <a class="button button-secondary"
+               href="{% url 'bridge_core:odoo_integration_settings' %}">
+                Configure Odoo.sh connection
+            </a>
+        </div>
+    </aside>
+</div>
+
+<section class="panel section-gap">
+    <p class="eyebrow">Deployment safety boundary</p>
+    <h2 class="panel-title">Worker and environment remain unchanged</h2>
+
+    <div class="grid grid-4">
+        <article class="metric">
+            <span class="metric-label">Environment reader backend</span>
+            <span class="metric-value metric-value-small">
+                {{ environment_reader_backend }}
+            </span>
+        </article>
+
+        <article class="metric">
+            <span class="metric-label">Environment sender backend</span>
+            <span class="metric-value metric-value-small">
+                {{ environment_sender_backend }}
+            </span>
+        </article>
+
+        <article class="metric">
+            <span class="metric-label">Environment reader contact</span>
+            <span class="metric-value metric-value-small">
+                {% if environment_reader_contact %}Allowed{% else %}Blocked{% endif %}
+            </span>
+        </article>
+
+        <article class="metric">
+            <span class="metric-label">Environment Odoo contact</span>
+            <span class="metric-value metric-value-small">
+                {% if environment_odoo_contact %}Allowed{% else %}Blocked{% endif %}
+            </span>
+        </article>
+    </div>
+
+    <div class="alert section-gap">
+        The sender backend remains disabled and the worker remains stopped.
+        These settings cannot deliver queued RFID events.
+    </div>
+</section>
+{% endblock %}

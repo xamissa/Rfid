@@ -1,0 +1,55 @@
+{% extends "bridge_core/base.html" %}
+
+{% block title %}Delivery attempts | RFID Bridge{% endblock %}
+{% block eyebrow %}Operational monitoring{% endblock %}
+{% block page_title %}Delivery attempts{% endblock %}
+
+{% block content %}
+<section class="panel">
+    <p class="eyebrow">Most recent 200 records</p>
+    <h2 style="margin:4px 0 20px;">Delivery history</h2>
+
+    {% if attempts %}
+        <div style="overflow-x:auto;">
+            <table style="width:100%;border-collapse:collapse;">
+                <thead>
+                    <tr>
+                        <th style="text-align:left;padding:12px;border-bottom:1px solid #dfe5ed;">Attempted</th>
+                        <th style="text-align:left;padding:12px;border-bottom:1px solid #dfe5ed;">Reader</th>
+                        <th style="text-align:left;padding:12px;border-bottom:1px solid #dfe5ed;">Event</th>
+                        <th style="text-align:left;padding:12px;border-bottom:1px solid #dfe5ed;">Attempt</th>
+                        <th style="text-align:left;padding:12px;border-bottom:1px solid #dfe5ed;">Outcome</th>
+                        <th style="text-align:left;padding:12px;border-bottom:1px solid #dfe5ed;">Response</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for attempt in attempts %}
+                        <tr>
+                            <td style="padding:12px;border-bottom:1px solid #edf1f5;">
+                                {{ attempt.attempted_at|date:"Y-m-d H:i:s" }}
+                            </td>
+                            <td style="padding:12px;border-bottom:1px solid #edf1f5;">
+                                {{ attempt.event.device.code }}
+                            </td>
+                            <td style="padding:12px;border-bottom:1px solid #edf1f5;">
+                                {{ attempt.event.event_id }}
+                            </td>
+                            <td style="padding:12px;border-bottom:1px solid #edf1f5;">
+                                {{ attempt.attempt_number }}
+                            </td>
+                            <td style="padding:12px;border-bottom:1px solid #edf1f5;">
+                                {{ attempt.get_outcome_display }}
+                            </td>
+                            <td style="padding:12px;border-bottom:1px solid #edf1f5;">
+                                {{ attempt.response_code|default:attempt.error_kind|default:"—" }}
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% else %}
+        <p>No delivery attempts have been recorded.</p>
+    {% endif %}
+</section>
+{% endblock %}

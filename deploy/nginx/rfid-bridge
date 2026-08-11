@@ -1,0 +1,31 @@
+server {
+    listen 80;
+    listen [::]:80;
+
+    server_name rfid-bridge-01 192.168.1.116;
+
+    client_max_body_size 2m;
+
+    access_log /var/log/nginx/rfid-bridge-access.log;
+    error_log /var/log/nginx/rfid-bridge-error.log;
+
+    location /static/ {
+        alias /var/lib/rfid_bridge/staticfiles/;
+        access_log off;
+        expires 1h;
+        add_header Cache-Control "public";
+    }
+
+    location / {
+        proxy_pass http://unix:/run/rfid_bridge/web.sock;
+
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        proxy_connect_timeout 5s;
+        proxy_send_timeout 30s;
+        proxy_read_timeout 30s;
+    }
+}

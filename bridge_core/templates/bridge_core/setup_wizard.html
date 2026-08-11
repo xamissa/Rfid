@@ -1,0 +1,109 @@
+{% extends "bridge_core/base.html" %}
+
+{% block title %}Initial setup | RFID Bridge{% endblock %}
+{% block eyebrow %}Deployment setup{% endblock %}
+{% block page_title %}Welcome to RFID Bridge{% endblock %}
+
+{% block content %}
+
+<section class="card">
+
+    <p class="eyebrow">First-time configuration</p>
+
+    <h2>Let's configure your RFID Bridge</h2>
+
+    <p>
+        Complete the required checks below before enabling normal
+        operation of the RFID Bridge.
+    </p>
+
+    <h3 style="margin-top:24px;">
+        Deployment readiness
+    </h3>
+
+    <div class="grid grid-2" style="margin-top:20px;">
+
+        {% for check in setup_readiness.required_checks %}
+        <article class="metric">
+            <span class="metric-label">
+                {{ check.label }}
+            </span>
+
+            <span class="metric-value">
+                {% if check.ready %}
+                    Ready
+                {% else %}
+                    Pending
+                {% endif %}
+            </span>
+        </article>
+        {% endfor %}
+
+    </div>
+
+
+    <h3 style="margin-top:32px;">
+        Safety controls
+    </h3>
+
+    <div class="grid grid-2" style="margin-top:20px;">
+
+        {% for check in setup_readiness.safety_checks %}
+        <article class="metric">
+            <span class="metric-label">
+                {{ check.label }}
+            </span>
+
+            <span class="metric-value">
+                {% if check.ready %}
+                    Approved
+                {% else %}
+                    Locked
+                {% endif %}
+            </span>
+        </article>
+        {% endfor %}
+
+    </div>
+
+    <div style="margin-top:24px;">
+
+        {% if deployment_ready %}
+
+            <form method="post">
+                {% csrf_token %}
+
+                <button class="button button-primary"
+                        type="submit">
+                    Complete setup and open dashboard
+                </button>
+            </form>
+
+        {% else %}
+
+            <div class="alert alert-info">
+                Complete the required configuration steps before
+                finishing deployment.
+            </div>
+
+            <div class="grid" style="margin-top:16px;">
+
+                <a class="button button-primary"
+                   href="{% url 'bridge_core:reader_list' %}">
+                    Configure RFID readers
+                </a>
+
+                <a class="button button-secondary"
+                   href="{% url 'bridge_core:odoo_integration_settings' %}">
+                    Configure Odoo connection
+                </a>
+
+            </div>
+
+        {% endif %}
+
+    </div>
+
+</section>
+
+{% endblock %}

@@ -1,0 +1,59 @@
+{% extends "bridge_core/base.html" %}
+
+{% block title %}Events | RFID Bridge{% endblock %}
+{% block eyebrow %}Operational monitoring{% endblock %}
+{% block page_title %}RFID events{% endblock %}
+
+{% block content %}
+<section class="panel">
+    <p class="eyebrow">Most recent 200 records</p>
+    <h2 style="margin:4px 0 20px;">Event queue</h2>
+
+    {% if events %}
+        <div style="overflow-x:auto;">
+            <table style="width:100%;border-collapse:collapse;">
+                <thead>
+                    <tr>
+                        <th style="text-align:left;padding:12px;border-bottom:1px solid #dfe5ed;">Received</th>
+                        <th style="text-align:left;padding:12px;border-bottom:1px solid #dfe5ed;">Reader</th>
+                        <th style="text-align:left;padding:12px;border-bottom:1px solid #dfe5ed;">Event key</th>
+                        <th style="text-align:left;padding:12px;border-bottom:1px solid #dfe5ed;">EPC</th>
+                        <th style="text-align:left;padding:12px;border-bottom:1px solid #dfe5ed;">Session</th>
+                        <th style="text-align:left;padding:12px;border-bottom:1px solid #dfe5ed;">Queue state</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for event in events %}
+                        <tr>
+                            <td style="padding:12px;border-bottom:1px solid #edf1f5;">
+                                {{ event.received_at|date:"Y-m-d H:i:s" }}
+                            </td>
+                            <td style="padding:12px;border-bottom:1px solid #edf1f5;">
+                                {{ event.device.code }}
+                            </td>
+                            <td style="padding:12px;border-bottom:1px solid #edf1f5;">
+                                {{ event.reader_event_key }}
+                            </td>
+                            <td style="padding:12px;border-bottom:1px solid #edf1f5;">
+                                {{ event.epc|default:"—" }}
+                            </td>
+                            <td style="padding:12px;border-bottom:1px solid #edf1f5;">
+                                {% if event.rfid_session %}
+                                    {{ event.rfid_session.external_session_key }}
+                                {% else %}
+                                    —
+                                {% endif %}
+                            </td>
+                            <td style="padding:12px;border-bottom:1px solid #edf1f5;">
+                                {{ event.get_queue_state_display }}
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% else %}
+        <p>No RFID events have been recorded.</p>
+    {% endif %}
+</section>
+{% endblock %}

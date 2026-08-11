@@ -1,0 +1,193 @@
+{% extends "bridge_core/base.html" %}
+
+{% block title %}Dashboard | RFID Bridge{% endblock %}
+{% block eyebrow %}System overview{% endblock %}
+{% block page_title %}RFID Bridge Dashboard{% endblock %}
+
+{% block content %}
+
+<section class="card">
+    {% if setup_completed %}
+        <div class="safety-banner">
+            <strong>System configured</strong>
+            Initial deployment setup has been completed.
+        </div>
+    {% else %}
+        <div class="alert alert-error">
+            <strong>Setup required</strong>
+            Complete the deployment wizard before connecting RFID hardware.
+            <br><br>
+            <a class="button button-primary"
+               href="{% url 'bridge_core:setup_wizard' %}">
+                Continue setup
+            </a>
+        </div>
+    {% endif %}
+</section>
+
+
+<section class="grid grid-4">
+
+    <article class="metric">
+        <span class="metric-label">
+            Deployment status
+        </span>
+        <span class="metric-value">
+            {% if setup_completed %}
+                Ready
+            {% else %}
+                Setup required
+            {% endif %}
+        </span>
+    </article>
+
+
+    <article class="metric">
+        <span class="metric-label">
+            RFID reader
+        </span>
+        <span class="metric-value">
+            {% if reader_backend_configured %}
+                Configured
+            {% else %}
+                Not configured
+            {% endif %}
+        </span>
+    </article>
+
+
+    <article class="metric">
+        <span class="metric-label">
+            Odoo integration
+        </span>
+        <span class="metric-value">
+            {% if configuration.odoo_integration_enabled %}
+                Enabled
+            {% else %}
+                Disabled
+            {% endif %}
+        </span>
+    </article>
+
+
+    <article class="metric">
+        <span class="metric-label">
+            Processing queue
+        </span>
+        <span class="metric-value">
+            {{ queue_depth }}
+        </span>
+    </article>
+
+</section>
+
+
+<section class="grid grid-2" style="margin-top:20px;">
+
+<section class="panel">
+    <p class="eyebrow">System readiness</p>
+    <h2 class="panel-title">
+        Deployment checklist
+    </h2>
+
+    {% for check in system_readiness.checks %}
+        <div class="metric">
+            <span class="metric-label">
+                {{ check.label }}
+            </span>
+
+            <span class="metric-value">
+                {% if check.ready %}
+                    Ready
+                {% else %}
+                    Pending
+                {% endif %}
+            </span>
+        </div>
+    {% endfor %}
+
+</section>
+
+
+<section class="panel">
+    <p class="eyebrow">Quick actions</p>
+    <h2 class="panel-title">
+        Configuration
+    </h2>
+
+    <div class="grid">
+
+        <a class="button button-primary"
+           href="{% url 'bridge_core:reader_list' %}">
+            Configure RFID readers
+        </a>
+
+
+        <a class="button button-secondary"
+           href="{% url 'bridge_core:odoo_integration_settings' %}">
+            Configure Odoo connection
+        </a>
+
+
+        <a class="button button-secondary"
+           href="{% url 'bridge_core:poc_control_centre' %}">
+            Advanced controls
+        </a>
+
+    </div>
+
+</section>
+
+</section>
+
+
+<section class="panel" style="margin-top:20px;">
+    <p class="eyebrow">
+        System information
+    </p>
+
+    <div class="grid grid-3">
+
+        <article class="metric">
+            <span class="metric-label">
+                Reader backend
+            </span>
+            <span class="metric-value">
+                {{ reader_backend }}
+            </span>
+        </article>
+
+
+        <article class="metric">
+            <span class="metric-label">
+                Reader connection
+            </span>
+            <span class="metric-value">
+                {% if reader_contact_allowed %}
+                    Allowed
+                {% else %}
+                    Blocked
+                {% endif %}
+            </span>
+        </article>
+
+
+        <article class="metric">
+            <span class="metric-label">
+                Odoo connection
+            </span>
+            <span class="metric-value">
+                {% if odoo_contact_allowed %}
+                    Allowed
+                {% else %}
+                    Blocked
+                {% endif %}
+            </span>
+        </article>
+
+    </div>
+
+</section>
+
+
+{% endblock %}

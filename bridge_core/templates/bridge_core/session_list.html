@@ -1,0 +1,137 @@
+{% extends "bridge_core/base.html" %}
+
+{% block title %}Sessions | RFID Bridge{% endblock %}
+{% block eyebrow %}Operational monitoring{% endblock %}
+{% block page_title %}RFID sessions{% endblock %}
+
+{% block content %}
+<section class="safety-banner">
+    <strong>Controlled active scanning</strong>
+    Active scans are staff-only, require an active session and explicit
+    confirmation, and cannot send RFID events to Odoo while the sender
+    remains disabled.
+</section>
+
+<section class="grid grid-4 section-gap">
+    <article class="metric">
+        <span class="metric-label">Active TCP backend</span>
+        <span class="metric-value metric-value-small">
+            {% if active_tcp_selected %}Selected{% else %}Not selected{% endif %}
+        </span>
+    </article>
+
+    <article class="metric">
+        <span class="metric-label">Reader contact</span>
+        <span class="metric-value metric-value-small">
+            {% if reader_contact_allowed %}Approved{% else %}Blocked{% endif %}
+        </span>
+    </article>
+
+    <article class="metric">
+        <span class="metric-label">Odoo contact</span>
+        <span class="metric-value metric-value-small">
+            {% if odoo_contact_allowed %}Approved{% else %}Blocked{% endif %}
+        </span>
+    </article>
+
+    <article class="metric">
+        <span class="metric-label">Sender backend</span>
+        <span class="metric-value metric-value-small">
+            {{ sender_backend }}
+        </span>
+    </article>
+</section>
+
+<section class="panel section-gap">
+    <p class="eyebrow">Most recent 200 records</p>
+    <h2 style="margin:4px 0 20px;">Sessions</h2>
+
+    {% if sessions %}
+        <div style="overflow-x:auto;">
+            <table style="width:100%;border-collapse:collapse;">
+                <thead>
+                    <tr>
+                        <th style="text-align:left;padding:12px;border-bottom:1px solid #dfe5ed;">Opened</th>
+                        <th style="text-align:left;padding:12px;border-bottom:1px solid #dfe5ed;">Reader</th>
+                        <th style="text-align:left;padding:12px;border-bottom:1px solid #dfe5ed;">Operation</th>
+                        <th style="text-align:left;padding:12px;border-bottom:1px solid #dfe5ed;">Odoo reference</th>
+                        <th style="text-align:left;padding:12px;border-bottom:1px solid #dfe5ed;">Status</th>
+                        <th style="text-align:left;padding:12px;border-bottom:1px solid #dfe5ed;">Controlled scan</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for session in sessions %}
+                        <tr>
+                            <td style="padding:12px;border-bottom:1px solid #edf1f5;">
+                                {{ session.opened_at|date:"Y-m-d H:i:s" }}
+                            </td>
+                            <td style="padding:12px;border-bottom:1px solid #edf1f5;">
+                                {{ session.device.code }}
+                            </td>
+                            <td style="padding:12px;border-bottom:1px solid #edf1f5;">
+                                {{ session.get_operation_type_display }}
+                            </td>
+                            <td style="padding:12px;border-bottom:1px solid #edf1f5;">
+                                {{ session.odoo_reference|default:"—" }}
+                            </td>
+                            <td style="padding:12px;border-bottom:1px solid #edf1f5;">
+                                {{ session.get_status_display }}
+                            </td>
+                            <td style="padding:12px;border-bottom:1px solid #edf1f5;min-width:300px;">
+                                {% if session.status == "active" %}
+                                    {% if active_tcp_selected and reader_contact_allowed and not odoo_contact_allowed and sender_backend == "disabled" %}
+                                        <form method="post"
+                                              action="{% url 'bridge_core:active_session_scan' session.id %}">
+                                            {% csrf_token %}
+
+                                            <label>
+                                                Scan seconds
+                                                <input type="number"
+                                                       name="scan_seconds"
+                                                       min="1"
+                                                       max="60"
+                                                       step="1"
+                                                       value="10"
+                                                       required>
+                                            </label>
+
+                                            <label style="display:block;margin-top:8px;">
+                                                Confirmation
+                                                <input type="text"
+                                                       name="confirmation"
+                                                       autocomplete="off"
+                                                       placeholder="SCAN_AND_STORE_ACTIVE_SESSION"
+                                                       required>
+                                            </label>
+
+                                            <button class="button button-primary"
+                                                    style="margin-top:8px;"
+                                                    type="submit">
+                                                Scan and store tags
+                                            </button>
+                                        </form>
+                                    {% else %}
+                                        <span class="status-badge status-hold">
+                                            Configuration blocked
+                                        </span>
+                                        <div style="margin-top:6px;">
+                                            Select Active TCP, approve reader contact,
+                                            keep Odoo blocked and keep the sender disabled.
+                                        </div>
+                                    {% endif %}
+                                {% else %}
+                                    <span class="status-badge status-hold">
+                                        Session not active
+                                    </span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% else %}
+        <p>No RFID sessions have been recorded.</p>
+    {% endif %}
+</section>
+{% endblock %}

@@ -1,0 +1,77 @@
+RFID BRIDGE WORKER UNIT INSTALLATION EVIDENCE
+
+Canonical source:
+deploy/systemd/rfid-bridge-worker.service
+
+Installed target:
+/etc/systemd/system/rfid-bridge-worker.service
+
+Installation verification:
+- Canonical unit passed systemd-analyze verify.
+- Safe one-cycle worker command passed as service account rfidbridge.
+- Installed unit is owned by root:root.
+- Installed unit mode is 0644.
+- Installed unit matches the canonical source byte-for-byte.
+- systemctl daemon-reload completed successfully.
+- LoadState=loaded.
+- ActiveState=inactive.
+- SubState=dead.
+- Enabled state=disabled.
+- No multi-user.target enablement symlink exists.
+- Worker was not started.
+- Worker was not enabled.
+
+Existing service verification:
+- PostgreSQL remained active and enabled.
+- Nginx remained active and enabled.
+- rfid-bridge-web.service remained active and enabled.
+
+Offline fail-closed verification:
+- READER_BACKEND=fake
+- SENDER_BACKEND=disabled
+- ALLOW_PHYSICAL_READER_CONTACT=false
+- ALLOW_ODOO_CONTACT=false
+
+Controlled offline runtime test:
+- Worker started successfully through systemd.
+- ActiveState became active.
+- SubState became running.
+- Worker ran as user and group rfidbridge.
+- Command used the canonical Django run_rfid_worker entry point.
+- Poll interval was 5 seconds.
+- Logs repeatedly confirmed READER_BACKEND=fake.
+- Logs repeatedly confirmed SENDER_BACKEND=disabled.
+- Logs repeatedly confirmed physical reader contact was false.
+- Logs repeatedly confirmed Odoo contact was false.
+- ReaderDevice rows remained 0.
+- RawRFIDEvent rows remained 0.
+- DeliveryAttempt rows remained 0.
+- OperationalConfiguration rows remained 1.
+- Worker stopped cleanly through systemd.
+- Final LoadState=loaded.
+- Final ActiveState=inactive.
+- Final SubState=dead.
+- Final MainPID=0.
+- Final enabled state=disabled.
+
+Full fake-read worker ingestion verification:
+- Complete worker ingestion path was tested against the real PostgreSQL schema.
+- The test used a temporary enabled receiving ReaderDevice.
+- The test used the fake reader backend only.
+- No physical RFID reader contact occurred.
+- No Odoo contact occurred.
+- First worker cycle received 1 technical read.
+- First worker cycle created 1 RawRFIDEvent.
+- The created event queue state was unassigned.
+- The created event retained the expected EPC.
+- Second worker cycle received the same technical read.
+- Second worker cycle created 0 additional events.
+- Second worker cycle counted 1 duplicate event.
+- Exactly 1 RawRFIDEvent existed for the temporary device.
+- No DeliveryAttempt row was created.
+- The entire verification ran inside a forced rollback transaction.
+- ReaderDevice rows returned to 0 after rollback.
+- RawRFIDEvent rows returned to 0 after rollback.
+- DeliveryAttempt rows returned to 0 after rollback.
+- Worker service remained inactive.
+- Worker service remained disabled.

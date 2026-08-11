@@ -1,0 +1,141 @@
+{% extends "bridge_core/base.html" %}
+
+{% block title %}Test {{ reader.code }} | RFID Bridge{% endblock %}
+{% block eyebrow %}Controlled hardware test{% endblock %}
+{% block page_title %}Test {{ reader.code }}{% endblock %}
+
+{% block content %}
+<section class="safety-banner">
+    <strong>One-shot test only</strong>
+    This action does not ingest database events, contact Odoo, or start
+    the worker.
+</section>
+
+<div class="alert">
+    Controlled backend:
+    <strong>{{ reader_backend }}</strong>.
+    Contact permission is managed from the staff-only
+    System configuration.
+</div>
+
+<section class="grid grid-4">
+    <article class="metric">
+        <span class="metric-label">Reader</span>
+        <span class="metric-value">{{ reader.code }}</span>
+    </article>
+
+    <article class="metric">
+        <span class="metric-label">Connection</span>
+        <span class="metric-value">
+            {{ reader.host }}:{{ reader.port }}
+        </span>
+    </article>
+
+    <article class="metric">
+        <span class="metric-label">Reader contact</span>
+        <span class="metric-value">
+            {% if allow_physical_reader_contact %}
+                Allowed
+            {% else %}
+                Blocked
+            {% endif %}
+        </span>
+    </article>
+
+    <article class="metric">
+        <span class="metric-label">Odoo contact</span>
+        <span class="metric-value">
+            {% if allow_odoo_contact %}
+                Allowed
+            {% else %}
+                Blocked
+            {% endif %}
+        </span>
+    </article>
+</section>
+
+<section class="panel" style="max-width:760px;margin-top:20px;">
+    <h2>Run one cached inventory scan</h2>
+
+    {% if not allow_physical_reader_contact %}
+        <div class="alert alert-error">
+            Physical reader contact is currently blocked by the
+            staff-only System configuration.
+        </div>
+    {% endif %}
+
+    {% if allow_odoo_contact %}
+        <div class="alert alert-error">
+            Odoo contact must remain disabled during reader validation.
+        </div>
+    {% endif %}
+
+    {% if sender_backend != "disabled" %}
+        <div class="alert alert-error">
+            The sender backend must remain disabled during reader validation.
+        </div>
+    {% endif %}
+
+    <form method="post">
+        {% csrf_token %}
+        {{ form.as_p }}
+
+        <div style="display:flex;gap:12px;align-items:center;">
+            <button class="button button-primary" type="submit">
+                Contact this reader once
+            </button>
+
+            <a class="button button-secondary"
+               href="{% url 'bridge_core:reader_list' %}">
+                Cancel
+            </a>
+        </div>
+    </form>
+</section>
+
+{% if technical_reads is not None %}
+<section class="panel" style="margin-top:20px;">
+    <p class="eyebrow">Test result</p>
+    <h2>Returned RFID reads: {{ technical_reads|length }}</h2>
+
+    {% if technical_reads %}
+        <div style="overflow-x:auto;">
+            <table style="width:100%;border-collapse:collapse;">
+                <thead>
+                    <tr>
+                        <th style="text-align:left;padding:12px;border-bottom:1px solid #dfe5ed;">
+                            EPC
+                        </th>
+                        <th style="text-align:left;padding:12px;border-bottom:1px solid #dfe5ed;">
+                            Event key
+                        </th>
+                        <th style="text-align:left;padding:12px;border-bottom:1px solid #dfe5ed;">
+                            Raw evidence
+                        </th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for read in technical_reads %}
+                        <tr>
+                            <td style="padding:12px;border-bottom:1px solid #edf1f5;">
+                                <strong>{{ read.epc }}</strong>
+                            </td>
+                            <td style="padding:12px;border-bottom:1px solid #edf1f5;">
+                                {{ read.reader_event_key }}
+                            </td>
+                            <td style="padding:12px;border-bottom:1px solid #edf1f5;">
+                                <code>{{ read.raw_payload }}</code>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% else %}
+        <div class="alert">
+            The reader completed the scan but returned no RFID tags.
+        </div>
+    {% endif %}
+</section>
+{% endif %}
+{% endblock %}
