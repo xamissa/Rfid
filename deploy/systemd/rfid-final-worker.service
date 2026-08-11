@@ -1,0 +1,40 @@
+[Unit]
+Description=RFID Bridge Final Odoo-Controlled Reader Worker
+After=network-online.target postgresql.service
+Wants=network-online.target postgresql.service
+
+[Service]
+Type=simple
+User=rfidbridge
+Group=rfidbridge
+WorkingDirectory=/opt/rfid_bridge/app
+
+UMask=0027
+
+Environment=PYTHONDONTWRITEBYTECODE=1
+Environment=PYTHONUNBUFFERED=1
+
+ExecStart=/opt/rfid_bridge/venv/bin/python \
+    /opt/rfid_bridge/app/manage.py \
+    run_final_rfid_worker
+
+Restart=on-failure
+RestartSec=5
+
+# The worker handles SIGTERM and performs a controlled physical STOP.
+KillSignal=SIGTERM
+TimeoutStopSec=30
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=full
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+
+[Install]
+WantedBy=multi-user.target
