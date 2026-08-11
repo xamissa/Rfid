@@ -233,7 +233,7 @@ class FinalRuntimeOrchestratorTests(TestCase):
             self.api.acks[-1]["success"]
         )
 
-    def test_start_failure_fails_closed(self):
+    def test_start_failure_fails_closed_and_cancels_new_session(self):
         self.runtime.mark_reader_verified_idle()
         self.reader_executor.fail_start = True
         self.api.command_payloads = [
@@ -249,6 +249,57 @@ class FinalRuntimeOrchestratorTests(TestCase):
         )
         self.assertFalse(
             self.api.acks[-1]["success"]
+        )
+
+        session = RFIDSession.objects.get(
+            external_session_key="session-001"
+        )
+
+        self.assertEqual(
+            session.status,
+            RFIDSession.Status.CANCELLED,
+        )
+
+        self.assertIsNotNone(
+            session.closed_at,
+        )
+
+    def test_start_failure_preserves_reused_active_session(self):
+        RFIDSession.objects.create(
+            external_session_key="session-001",
+            device=self.reader,
+            operation_type=RFIDSession.OperationType.RECEIPT,
+            odoo_model="stock.picking",
+            odoo_record_id=0,
+            odoo_reference="EXWS1/IN/02227",
+            status=RFIDSession.Status.ACTIVE,
+        )
+
+        self.runtime.mark_reader_verified_idle()
+        self.reader_executor.fail_start = True
+        self.api.command_payloads = [
+            self.start_payload()
+        ]
+
+        results = self.runtime.poll_commands()
+
+        self.assertFalse(results[0].success)
+        self.assertEqual(
+            self.runtime.runtime.state,
+            RuntimeState.DEGRADED,
+        )
+
+        session = RFIDSession.objects.get(
+            external_session_key="session-001"
+        )
+
+        self.assertEqual(
+            session.status,
+            RFIDSession.Status.ACTIVE,
+        )
+
+        self.assertIsNone(
+            session.closed_at,
         )
 
     def test_stop_failure_fails_closed(self):

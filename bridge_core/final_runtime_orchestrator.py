@@ -211,8 +211,10 @@ class FinalRuntimeOrchestrator:
     ):
         self.runtime = planned_runtime
 
+        session_sync = None
+
         try:
-            synchronize_start_command(
+            session_sync = synchronize_start_command(
                 command=command,
             )
 
@@ -226,9 +228,32 @@ class FinalRuntimeOrchestrator:
             )
 
         except Exception as exc:
+            cleanup_error = None
+
+            if (
+                session_sync is not None
+                and session_sync.created
+            ):
+                try:
+                    cancel_local_session(
+                        session_key=command.session_key,
+                        reader_code=command.reader_code,
+                    )
+                except Exception as cleanup_exc:
+                    cleanup_error = cleanup_exc
+
+            error_message = str(exc)
+
+            if cleanup_error is not None:
+                error_message = (
+                    f"{error_message}; newly-created local session "
+                    "cleanup also failed: "
+                    f"{cleanup_error}"
+                )
+
             self.runtime = (
                 self.runtime.mark_degraded(
-                    str(exc)
+                    error_message
                 )
             )
 
@@ -239,7 +264,7 @@ class FinalRuntimeOrchestrator:
                     command=command.command.value,
                     revision=command.revision,
                     success=False,
-                    message=str(exc),
+                    message=error_message,
                 )
             except Exception:
                 pass
@@ -248,7 +273,7 @@ class FinalRuntimeOrchestrator:
                 runtime=self.runtime,
                 command=command,
                 success=False,
-                message=str(exc),
+                message=error_message,
             )
 
         self.runtime = (
