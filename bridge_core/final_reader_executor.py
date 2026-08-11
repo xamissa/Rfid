@@ -187,6 +187,65 @@ class PersistentActiveReaderExecutor:
             "No active inventory STOP response was received."
         )
 
+    def verify_idle(self):
+        """
+        Establish a known-safe reader state after process startup.
+
+        A fresh TCP session sends STOP and requires a successful STOP
+        response. This never resumes a previous inventory session.
+        """
+        if self.is_active:
+            raise FinalReaderExecutorError(
+                "Cannot perform startup verification while reader is active."
+            )
+
+        transport = self._build_transport()
+        session_context = transport.open_session()
+        session = None
+
+        try:
+            session = session_context.__enter__()
+
+            stop_request = build_frame(
+                address=self.device.device_address,
+                sequence=11,
+                command=COMMAND_STOP,
+            )
+
+            session.send(stop_request)
+
+            for _ in range(32):
+                frames = session.receive(
+                    expected_commands=(COMMAND_STOP,),
+                    maximum_reads=32,
+                    timeout_returns_empty=True,
+                )
+
+                if not frames:
+                    continue
+
+                for frame in frames:
+                    self._validate_frame_address(frame)
+
+                    if frame.command != COMMAND_STOP:
+                        continue
+
+                    if frame.status != 0:
+                        raise FinalReaderExecutorError(
+                            "RFID startup STOP verification failed "
+                            f"with status {frame.status}."
+                        )
+
+                    return
+
+            raise FinalReaderExecutorError(
+                "No STOP response received during startup verification."
+            )
+
+        finally:
+            if session is not None:
+                session.close()
+
     def start(
         self,
         *,

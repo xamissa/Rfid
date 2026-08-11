@@ -451,3 +451,89 @@ class PersistentActiveReaderExecutorTests(
                     enabled=False
                 ),
             )
+
+
+class PersistentReaderStartupVerificationTests(
+    SimpleTestCase
+):
+    def device(self):
+        return SimpleNamespace(
+            code="receiving-door-01",
+            enabled=True,
+            inventory_mode=(
+                ReaderDevice.InventoryMode.ACTIVE
+            ),
+            host="192.168.1.201",
+            port=8090,
+            device_address=2,
+            connect_timeout_seconds=5,
+            read_timeout_seconds=5,
+        )
+
+    def test_verify_idle_sends_stop_and_closes_socket(self):
+        session = FakeSession(
+            [
+                [
+                    frame(
+                        command=COMMAND_STOP,
+                        status=0,
+                    )
+                ]
+            ]
+        )
+
+        factory = RecordingTransportFactory(
+            session
+        )
+
+        executor = PersistentActiveReaderExecutor(
+            device=self.device(),
+            transport_factory=factory,
+        )
+
+        executor.verify_idle()
+
+        self.assertTrue(
+            session.closed
+        )
+
+        self.assertEqual(
+            parse_frame(
+                session.sent[0]
+            ).command,
+            COMMAND_STOP,
+        )
+
+        self.assertFalse(
+            executor.is_active
+        )
+
+    def test_verify_idle_rejects_failed_stop(self):
+        session = FakeSession(
+            [
+                [
+                    frame(
+                        command=COMMAND_STOP,
+                        status=5,
+                    )
+                ]
+            ]
+        )
+
+        executor = PersistentActiveReaderExecutor(
+            device=self.device(),
+            transport_factory=(
+                RecordingTransportFactory(
+                    session
+                )
+            ),
+        )
+
+        with self.assertRaises(
+            FinalReaderExecutorError
+        ):
+            executor.verify_idle()
+
+        self.assertTrue(
+            session.closed
+        )
