@@ -453,10 +453,16 @@ class FinalRuntimeOrchestrator:
                     reader_code=command.reader_code,
                 )
 
-            self.reader_executor.stop(
-                session_key=command.session_key,
-                reader_code=command.reader_code,
-            )
+            if self.reader_executor.is_active:
+                self.reader_executor.stop(
+                    session_key=command.session_key,
+                    reader_code=command.reader_code,
+                )
+            else:
+                # Recovery ABORT may arrive after START never reached this
+                # process. Missing persistent state is not proof that the
+                # hardware is idle, so require a fresh physical STOP/ACK.
+                self.reader_executor.verify_idle()
 
             self.runtime = (
                 self.runtime.mark_reader_stopped()

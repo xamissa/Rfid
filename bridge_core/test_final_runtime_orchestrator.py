@@ -41,6 +41,7 @@ class FakeReaderExecutor:
         self.stops = []
         self.fail_start = False
         self.fail_stop = False
+        self.idle_verifications = 0
         self._active_session_key = None
 
     @property
@@ -68,6 +69,9 @@ class FakeReaderExecutor:
             (session_key, reader_code)
         )
         self._active_session_key = None
+
+    def verify_idle(self):
+        self.idle_verifications += 1
 
 
 class FinalRuntimeOrchestratorTests(TestCase):
@@ -334,6 +338,59 @@ class FinalRuntimeOrchestratorTests(TestCase):
         )
         self.assertFalse(
             self.api.acks[-1]["success"]
+        )
+
+    def test_abort_without_persistent_session_verifies_idle_and_acks(self):
+        self.runtime.mark_reader_verified_idle()
+
+        self.api.command_payloads = [
+            {
+                "session_key": "expired-session-001",
+                "reader_code": "receiving-door-01",
+                "command": "abort",
+                "revision": 2,
+                "picking": "EXWS1/IN/02227",
+            }
+        ]
+
+        results = self.runtime.poll_commands()
+
+        self.assertEqual(len(results), 1)
+        self.assertTrue(results[0].success)
+
+        self.assertEqual(
+            self.runtime.runtime.state,
+            RuntimeState.IDLE,
+        )
+
+        self.assertEqual(
+            self.reader_executor.idle_verifications,
+            1,
+        )
+
+        self.assertEqual(
+            self.reader_executor.stops,
+            [],
+        )
+
+        self.assertFalse(
+            RFIDSession.objects.filter(
+                external_session_key="expired-session-001"
+            ).exists()
+        )
+
+        self.assertTrue(
+            self.api.acks[-1]["success"]
+        )
+
+        self.assertEqual(
+            self.api.acks[-1]["command"],
+            "abort",
+        )
+
+        self.assertEqual(
+            self.api.acks[-1]["revision"],
+            2,
         )
 
     def test_other_reader_command_is_ignored(self):
