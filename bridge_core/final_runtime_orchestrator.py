@@ -36,10 +36,12 @@ class FinalRuntimeOrchestrator:
         reader_executor,
         reader_code=FINAL_RECEIVING_READER_CODE,
         before_session_close=None,
+        before_success_ack=None,
     ):
         self.api_client = api_client
         self.reader_executor = reader_executor
         self.before_session_close = before_session_close
+        self.before_success_ack = before_success_ack
         self.runtime = LocalReaderRuntime(
             reader_code=reader_code,
             state=RuntimeState.OFFLINE,
@@ -144,6 +146,15 @@ class FinalRuntimeOrchestrator:
         *,
         command,
     ):
+        if (
+            command.command == RuntimeCommand.STOP
+            and self.before_success_ack is not None
+        ):
+            self.before_success_ack(
+                session_key=command.session_key,
+                reader_code=command.reader_code,
+            )
+
         ack_result = self.api_client.ack(
             session_key=command.session_key,
             reader_code=command.reader_code,

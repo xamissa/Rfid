@@ -134,6 +134,10 @@ class Command(BaseCommand):
             worker.drain_pending_tags
         )
 
+        orchestrator.before_success_ack = (
+            worker.require_stop_delivery_complete
+        )
+
         self.stdout.write(
             "RFID_FINAL_WORKER_STARTUP_STATE=offline"
         )

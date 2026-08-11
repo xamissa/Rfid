@@ -1,5 +1,8 @@
 from dataclasses import dataclass
 
+from bridge_core.final_delivery_barrier import (
+    require_final_session_delivery_complete,
+)
 from bridge_core.final_runtime_state import RuntimeState
 from bridge_core.final_tag_ingestion import (
     ingest_final_active_tag_frames,
@@ -65,6 +68,22 @@ class FinalWorkerCycle:
             device=self.device,
             session_key=session_key,
             frames=frames,
+        )
+
+    def require_stop_delivery_complete(
+        self,
+        *,
+        session_key,
+        reader_code,
+    ):
+        if reader_code != self.device.code:
+            raise FinalWorkerCycleError(
+                "STOP delivery barrier reader identity mismatch."
+            )
+
+        return require_final_session_delivery_complete(
+            session_key=session_key,
+            reader_code=reader_code,
         )
 
     def _poll_active_tags(self):
