@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 
 from django.db.models import (
+    Count,
     OuterRef,
     Q,
     Subquery,
@@ -13,6 +14,9 @@ from bridge_core.delivery_cycle import (
 from bridge_core.models import (
     DeliveryAttempt,
     RawRFIDEvent,
+)
+from bridge_core.queue_service import (
+    transition_event_queue_state,
 )
 
 
@@ -97,6 +101,71 @@ def select_final_delivery_candidates(
     return tuple(candidates)
 
 
+def dead_letter_exhausted_final_events(
+    *,
+    reader_code,
+    max_delivery_attempts,
+):
+    if max_delivery_attempts < 1:
+        raise ValueError(
+            "Maximum delivery attempts must be at least 1."
+        )
+
+    reader_code = str(
+        reader_code or ""
+    ).strip()
+
+    if not reader_code:
+        raise FinalDeliveryCycleError(
+            "Final RFID reader code cannot be empty."
+        )
+
+    exhausted = tuple(
+        RawRFIDEvent.objects
+        .filter(
+            device__code=reader_code,
+            rfid_session__isnull=False,
+            reader_event_key__startswith="final:",
+            queue_state=RawRFIDEvent.QueueState.RETRY,
+        )
+        .annotate(
+            delivery_attempt_count=Count(
+                "delivery_attempts"
+            )
+        )
+        .filter(
+            delivery_attempt_count__gte=(
+                max_delivery_attempts
+            )
+        )
+        .values_list(
+            "event_id",
+            flat=True,
+        )
+    )
+
+    dead_count = 0
+
+    for event_id in exhausted:
+        try:
+            transition_event_queue_state(
+                event_id=event_id,
+                expected_state=(
+                    RawRFIDEvent.QueueState.RETRY
+                ),
+                target_state=(
+                    RawRFIDEvent.QueueState.DEAD
+                ),
+            )
+        except ValueError:
+            # Another worker may have changed the state after selection.
+            continue
+
+        dead_count += 1
+
+    return dead_count
+
+
 @dataclass(frozen=True)
 class FinalDeliveryCycleResult:
     selected_count: int
@@ -105,6 +174,7 @@ class FinalDeliveryCycleResult:
     retry_count: int
     rejected_count: int
     dead_count: int
+    exhausted_dead_count: int
     failed_count: int
 
 
@@ -123,6 +193,13 @@ def run_final_delivery_cycle(
         raise ValueError(
             "Maximum delivery attempts must be at least 1."
         )
+
+    exhausted_dead_count = (
+        dead_letter_exhausted_final_events(
+            reader_code=reader_code,
+            max_delivery_attempts=max_delivery_attempts,
+        )
+    )
 
     candidates = selection_function(
         reader_code=reader_code,
@@ -177,5 +254,6 @@ def run_final_delivery_cycle(
         retry_count=counters["retry"],
         rejected_count=counters["rejected"],
         dead_count=counters["dead"],
+        exhausted_dead_count=exhausted_dead_count,
         failed_count=counters["failed"],
     )

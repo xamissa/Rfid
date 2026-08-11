@@ -206,3 +206,103 @@ class FinalDeliverySelectionTests(TestCase):
             event.delivery_attempts.count(),
             1,
         )
+
+
+class FinalDeliveryDeadLetterTests(TestCase):
+    def setUp(self):
+        self.reader = ReaderDevice.objects.create(
+            code="receiving-door-01",
+            name="Receiving Door 1",
+            role=ReaderDevice.Role.RECEIVING,
+            enabled=True,
+        )
+
+        self.session = RFIDSession.objects.create(
+            external_session_key="session-dead",
+            device=self.reader,
+            operation_type=(
+                RFIDSession.OperationType.RECEIPT
+            ),
+            odoo_record_id=0,
+        )
+
+    def make_retry_event(self):
+        return RawRFIDEvent.objects.create(
+            device=self.reader,
+            rfid_session=self.session,
+            reader_event_key="final:dead:test",
+            epc="E2000017221101441890ABCD",
+            raw_payload="{}",
+            queue_state=(
+                RawRFIDEvent.QueueState.RETRY
+            ),
+        )
+
+    def test_exhausted_retry_is_dead_lettered(self):
+        from bridge_core.final_delivery_cycle import (
+            dead_letter_exhausted_final_events,
+        )
+
+        event = self.make_retry_event()
+
+        for number in range(1, 4):
+            DeliveryAttempt.objects.create(
+                event=event,
+                attempt_number=number,
+                outcome=DeliveryAttempt.Outcome.RETRY,
+                completed_at=timezone.now(),
+                next_retry_at=timezone.now(),
+            )
+
+        count = (
+            dead_letter_exhausted_final_events(
+                reader_code="receiving-door-01",
+                max_delivery_attempts=3,
+            )
+        )
+
+        self.assertEqual(
+            count,
+            1,
+        )
+
+        event.refresh_from_db()
+
+        self.assertEqual(
+            event.queue_state,
+            RawRFIDEvent.QueueState.DEAD,
+        )
+
+    def test_nonexhausted_retry_remains_retry(self):
+        from bridge_core.final_delivery_cycle import (
+            dead_letter_exhausted_final_events,
+        )
+
+        event = self.make_retry_event()
+
+        DeliveryAttempt.objects.create(
+            event=event,
+            attempt_number=1,
+            outcome=DeliveryAttempt.Outcome.RETRY,
+            completed_at=timezone.now(),
+            next_retry_at=timezone.now(),
+        )
+
+        count = (
+            dead_letter_exhausted_final_events(
+                reader_code="receiving-door-01",
+                max_delivery_attempts=3,
+            )
+        )
+
+        self.assertEqual(
+            count,
+            0,
+        )
+
+        event.refresh_from_db()
+
+        self.assertEqual(
+            event.queue_state,
+            RawRFIDEvent.QueueState.RETRY,
+        )
