@@ -1,3 +1,4 @@
+import signal
 import time
 
 from django.conf import settings
@@ -163,6 +164,12 @@ class Command(BaseCommand):
         )
 
         cycle_number = 0
+        interrupted = False
+
+        previous_sigterm_handler = signal.signal(
+            signal.SIGTERM,
+            self._handle_termination_signal,
+        )
 
         try:
             while (
@@ -197,11 +204,40 @@ class Command(BaseCommand):
                 )
 
         except KeyboardInterrupt:
+            interrupted = True
+
             self.stdout.write(
                 self.style.WARNING(
-                    "HOLD: final RFID worker stopped by operator"
+                    "HOLD: final RFID worker shutdown requested"
                 )
             )
+
+        finally:
+            signal.signal(
+                signal.SIGTERM,
+                previous_sigterm_handler,
+            )
+
+            stopped_active_session = (
+                self._safe_shutdown_reader(
+                    reader_executor=reader_executor,
+                    worker=worker,
+                    reader_code=device.code,
+                )
+            )
+
+            if stopped_active_session:
+                interrupted = True
+
+                self.stdout.write(
+                    self.style.WARNING(
+                        "HOLD: active RFID reader was physically "
+                        "stopped during worker shutdown; local "
+                        "session remains active for controlled recovery"
+                    )
+                )
+
+        if interrupted:
             return
 
         self.stdout.write(
@@ -210,6 +246,57 @@ class Command(BaseCommand):
                 f"{cycle_number} cycle(s)"
             )
         )
+
+    @staticmethod
+    def _handle_termination_signal(signum, frame):
+        del signum, frame
+        raise KeyboardInterrupt
+
+    @staticmethod
+    def _safe_shutdown_reader(
+        *,
+        reader_executor,
+        worker,
+        reader_code,
+    ):
+        if not reader_executor.is_active:
+            reader_executor.close()
+            return False
+
+        session_key = str(
+            reader_executor.active_session_key or ""
+        ).strip()
+
+        if not session_key:
+            reader_executor.close()
+            raise CommandError(
+                "RFID reader shutdown found an active connection "
+                "without a session key."
+            )
+
+        try:
+            reader_executor.stop(
+                session_key=session_key,
+                reader_code=reader_code,
+            )
+        except Exception as exc:
+            raise CommandError(
+                "Failed to verify physical RFID STOP during "
+                f"worker shutdown: {exc}"
+            ) from exc
+
+        try:
+            worker.drain_pending_tags(
+                session_key=session_key,
+                reader_code=reader_code,
+            )
+        except Exception as exc:
+            raise CommandError(
+                "RFID reader stopped, but final buffered tag "
+                f"persistence failed during shutdown: {exc}"
+            ) from exc
+
+        return True
 
     @staticmethod
     def _require_live_gates():
