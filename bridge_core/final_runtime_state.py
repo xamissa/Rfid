@@ -98,6 +98,9 @@ class LocalReaderRuntime:
     session_key: str | None = None
     last_command_revision: int = 0
     error: str | None = None
+    completed_command_revision: int = 0
+    completed_command: RuntimeCommand | None = None
+    completed_session_key: str | None = None
 
     def heartbeat_payload(self):
         return {
@@ -122,7 +125,20 @@ class LocalReaderRuntime:
             command.revision == self.last_command_revision
             and self.last_command_revision != 0
         ):
-            return "duplicate"
+            if (
+                command.revision
+                == self.completed_command_revision
+                and command.command
+                == self.completed_command
+                and command.session_key
+                == self.completed_session_key
+            ):
+                return "duplicate"
+
+            raise RuntimeStateError(
+                "Command revision matches the last processed revision "
+                "but is not the exact completed command."
+            )
 
         return "new"
 
@@ -254,6 +270,32 @@ class LocalReaderRuntime:
             session_key=None,
             last_command_revision=self.last_command_revision,
             error=None,
+        )
+
+    def mark_command_completed(
+        self,
+        command: OdooRFIDCommand,
+    ):
+        if command.reader_code != self.reader_code:
+            raise RuntimeStateError(
+                "Completed command reader does not match runtime."
+            )
+
+        if command.revision != self.last_command_revision:
+            raise RuntimeStateError(
+                "Completed command revision does not match "
+                "the runtime revision."
+            )
+
+        return LocalReaderRuntime(
+            reader_code=self.reader_code,
+            state=self.state,
+            session_key=self.session_key,
+            last_command_revision=self.last_command_revision,
+            error=self.error,
+            completed_command_revision=command.revision,
+            completed_command=command.command,
+            completed_session_key=command.session_key,
         )
 
     def mark_degraded(self, error):

@@ -138,12 +138,15 @@ class FinalRuntimeStateTests(TestCase):
                 )
             )
 
-    def test_duplicate_revision_is_idempotent(self):
+    def test_exact_completed_duplicate_is_idempotent(self):
         runtime = LocalReaderRuntime(
             reader_code=FINAL_RECEIVING_READER_CODE,
-            state=RuntimeState.STARTING,
+            state=RuntimeState.READING,
             session_key="session-001",
             last_command_revision=1,
+            completed_command_revision=1,
+            completed_command=RuntimeCommand.START,
+            completed_session_key="session-001",
         )
 
         transition = runtime.plan_command(
@@ -236,3 +239,65 @@ class FinalRuntimeStateTests(TestCase):
             RuntimeCommand.ABORT.value,
             "abort",
         )
+
+
+class FinalRuntimeExactDuplicateTests(TestCase):
+    def test_same_revision_different_command_is_not_duplicate(self):
+        runtime = LocalReaderRuntime(
+            reader_code=FINAL_RECEIVING_READER_CODE,
+            state=RuntimeState.READING,
+            session_key="session-001",
+            last_command_revision=1,
+            completed_command_revision=1,
+            completed_command=RuntimeCommand.START,
+            completed_session_key="session-001",
+        )
+
+        conflicting = OdooRFIDCommand.from_payload(
+            {
+                "session_key": "session-001",
+                "reader_code": (
+                    FINAL_RECEIVING_READER_CODE
+                ),
+                "command": "stop",
+                "revision": 1,
+                "picking": "EXWS1/IN/02227",
+            }
+        )
+
+        with self.assertRaises(
+            RuntimeStateError
+        ):
+            runtime.plan_command(
+                conflicting
+            )
+
+    def test_same_revision_different_session_is_not_duplicate(self):
+        runtime = LocalReaderRuntime(
+            reader_code=FINAL_RECEIVING_READER_CODE,
+            state=RuntimeState.READING,
+            session_key="session-001",
+            last_command_revision=1,
+            completed_command_revision=1,
+            completed_command=RuntimeCommand.START,
+            completed_session_key="session-001",
+        )
+
+        conflicting = OdooRFIDCommand.from_payload(
+            {
+                "session_key": "session-other",
+                "reader_code": (
+                    FINAL_RECEIVING_READER_CODE
+                ),
+                "command": "start",
+                "revision": 1,
+                "picking": "EXWS1/IN/02227",
+            }
+        )
+
+        with self.assertRaises(
+            RuntimeStateError
+        ):
+            runtime.plan_command(
+                conflicting
+            )

@@ -4,6 +4,7 @@ from bridge_core.final_runtime_orchestrator import (
     FinalRuntimeOrchestrator,
 )
 from bridge_core.final_runtime_state import (
+    OdooRFIDCommand,
     RuntimeState,
 )
 from bridge_core.models import ReaderDevice, RFIDSession
@@ -378,4 +379,178 @@ class FinalRuntimePreCloseHookTests(TestCase):
         self.assertEqual(
             session.status,
             RFIDSession.Status.CLOSED,
+        )
+
+
+class FinalRuntimeLostAckRecoveryTests(TestCase):
+    def setUp(self):
+        self.reader = ReaderDevice.objects.create(
+            code="receiving-door-01",
+            name="Receiving Door 1",
+            role=ReaderDevice.Role.RECEIVING,
+            host="192.168.1.201",
+            port=8090,
+            device_address=2,
+            enabled=True,
+        )
+
+        self.api = FakeApiClient()
+        self.executor = FakeReaderExecutor()
+
+        self.orchestrator = FinalRuntimeOrchestrator(
+            api_client=self.api,
+            reader_executor=self.executor,
+        )
+
+        self.orchestrator.mark_reader_verified_idle()
+
+    def start_command(self):
+        return OdooRFIDCommand.from_payload(
+            {
+                "session_key": "session-ack",
+                "reader_code": "receiving-door-01",
+                "command": "start",
+                "revision": 1,
+                "picking": "EXWS1/IN/02227",
+            }
+        )
+
+    def stop_command(self):
+        return OdooRFIDCommand.from_payload(
+            {
+                "session_key": "session-ack",
+                "reader_code": "receiving-door-01",
+                "command": "stop",
+                "revision": 2,
+                "picking": "EXWS1/IN/02227",
+            }
+        )
+
+    def test_lost_start_ack_is_resent_without_second_start(self):
+        command = self.start_command()
+
+        original_ack = self.api.ack
+        failure_used = False
+
+        def flaky_ack(**kwargs):
+            nonlocal failure_used
+
+            if (
+                not failure_used
+                and kwargs["command"] == "start"
+                and kwargs["success"] is True
+            ):
+                failure_used = True
+                raise RuntimeError(
+                    "simulated ACK network loss"
+                )
+
+            return original_ack(**kwargs)
+
+        self.api.ack = flaky_ack
+
+        first = self.orchestrator.process_command(
+            command
+        )
+
+        self.assertFalse(
+            first.success
+        )
+        self.assertEqual(
+            self.orchestrator.runtime.state,
+            RuntimeState.READING,
+        )
+        self.assertEqual(
+            len(self.executor.starts),
+            1,
+        )
+
+        second = self.orchestrator.process_command(
+            command
+        )
+
+        self.assertTrue(
+            second.success
+        )
+        self.assertEqual(
+            len(self.executor.starts),
+            1,
+        )
+        self.assertTrue(
+            self.api.acks[-1]["success"]
+        )
+
+    def test_lost_stop_ack_is_resent_without_second_stop(self):
+        start = self.start_command()
+
+        start_result = (
+            self.orchestrator.process_command(
+                start
+            )
+        )
+
+        self.assertTrue(
+            start_result.success
+        )
+
+        command = self.stop_command()
+
+        original_ack = self.api.ack
+        failure_used = False
+
+        def flaky_ack(**kwargs):
+            nonlocal failure_used
+
+            if (
+                not failure_used
+                and kwargs["command"] == "stop"
+                and kwargs["success"] is True
+            ):
+                failure_used = True
+                raise RuntimeError(
+                    "simulated ACK network loss"
+                )
+
+            return original_ack(**kwargs)
+
+        self.api.ack = flaky_ack
+
+        first = self.orchestrator.process_command(
+            command
+        )
+
+        self.assertFalse(
+            first.success
+        )
+        self.assertEqual(
+            self.orchestrator.runtime.state,
+            RuntimeState.IDLE,
+        )
+        self.assertEqual(
+            len(self.executor.stops),
+            1,
+        )
+
+        session = RFIDSession.objects.get(
+            external_session_key="session-ack"
+        )
+
+        self.assertEqual(
+            session.status,
+            RFIDSession.Status.CLOSED,
+        )
+
+        second = self.orchestrator.process_command(
+            command
+        )
+
+        self.assertTrue(
+            second.success
+        )
+        self.assertEqual(
+            len(self.executor.stops),
+            1,
+        )
+        self.assertTrue(
+            self.api.acks[-1]["success"]
         )

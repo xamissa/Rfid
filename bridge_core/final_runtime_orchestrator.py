@@ -97,11 +97,8 @@ class FinalRuntimeOrchestrator:
             )
 
         if transition.duplicate:
-            return CommandExecutionResult(
-                runtime=self.runtime,
+            return self._resend_completed_ack(
                 command=command,
-                success=True,
-                message="Duplicate command revision ignored safely.",
             )
 
         if command.command == RuntimeCommand.START:
@@ -127,6 +124,74 @@ class FinalRuntimeOrchestrator:
             message="Unsupported command.",
         )
 
+    def _success_ack_message(self, command):
+        messages = {
+            RuntimeCommand.START: (
+                "Reader started successfully."
+            ),
+            RuntimeCommand.STOP: (
+                "Reader stopped successfully."
+            ),
+            RuntimeCommand.ABORT: (
+                "Reader abort completed."
+            ),
+        }
+
+        return messages[command.command]
+
+    def _send_completed_success_ack(
+        self,
+        *,
+        command,
+    ):
+        ack_result = self.api_client.ack(
+            session_key=command.session_key,
+            reader_code=command.reader_code,
+            command=command.command.value,
+            revision=command.revision,
+            success=True,
+            message=self._success_ack_message(
+                command
+            ),
+        )
+
+        if not ack_result.get("ok"):
+            raise FinalRuntimeOrchestratorError(
+                "Odoo did not accept completed command ACK."
+            )
+
+        return ack_result
+
+    def _resend_completed_ack(
+        self,
+        *,
+        command,
+    ):
+        try:
+            self._send_completed_success_ack(
+                command=command,
+            )
+        except Exception as exc:
+            return CommandExecutionResult(
+                runtime=self.runtime,
+                command=command,
+                success=False,
+                message=(
+                    "Completed command ACK is still pending: "
+                    f"{exc}"
+                ),
+            )
+
+        return CommandExecutionResult(
+            runtime=self.runtime,
+            command=command,
+            success=True,
+            message=(
+                "Duplicate completed command ACK resent "
+                "successfully."
+            ),
+        )
+
     def _execute_start(
         self,
         *,
@@ -145,31 +210,16 @@ class FinalRuntimeOrchestrator:
                 reader_code=command.reader_code,
             )
 
-            self.runtime = self.runtime.mark_reader_started()
-
-            ack_result = self.api_client.ack(
-                session_key=command.session_key,
-                reader_code=command.reader_code,
-                command=command.command.value,
-                revision=command.revision,
-                success=True,
-                message="Reader started successfully.",
-            )
-
-            if not ack_result.get("ok"):
-                raise FinalRuntimeOrchestratorError(
-                    "Odoo did not accept START ACK."
-                )
-
-            return CommandExecutionResult(
-                runtime=self.runtime,
-                command=command,
-                success=True,
-                message="Reader started and Odoo ACK accepted.",
+            self.runtime = (
+                self.runtime.mark_reader_started()
             )
 
         except Exception as exc:
-            self.runtime = self.runtime.mark_degraded(str(exc))
+            self.runtime = (
+                self.runtime.mark_degraded(
+                    str(exc)
+                )
+            )
 
             try:
                 self.api_client.ack(
@@ -189,6 +239,37 @@ class FinalRuntimeOrchestrator:
                 success=False,
                 message=str(exc),
             )
+
+        self.runtime = (
+            self.runtime.mark_command_completed(
+                command
+            )
+        )
+
+        try:
+            self._send_completed_success_ack(
+                command=command,
+            )
+        except Exception as exc:
+            return CommandExecutionResult(
+                runtime=self.runtime,
+                command=command,
+                success=False,
+                message=(
+                    "Reader started successfully but "
+                    "Odoo ACK is pending: "
+                    f"{exc}"
+                ),
+            )
+
+        return CommandExecutionResult(
+            runtime=self.runtime,
+            command=command,
+            success=True,
+            message=(
+                "Reader started and Odoo ACK accepted."
+            ),
+        )
 
     def _execute_stop(
         self,
@@ -204,7 +285,9 @@ class FinalRuntimeOrchestrator:
                 reader_code=command.reader_code,
             )
 
-            self.runtime = self.runtime.mark_reader_stopped()
+            self.runtime = (
+                self.runtime.mark_reader_stopped()
+            )
 
             if self.before_session_close is not None:
                 self.before_session_close(
@@ -217,29 +300,12 @@ class FinalRuntimeOrchestrator:
                 reader_code=command.reader_code,
             )
 
-            ack_result = self.api_client.ack(
-                session_key=command.session_key,
-                reader_code=command.reader_code,
-                command=command.command.value,
-                revision=command.revision,
-                success=True,
-                message="Reader stopped successfully.",
-            )
-
-            if not ack_result.get("ok"):
-                raise FinalRuntimeOrchestratorError(
-                    "Odoo did not accept STOP ACK."
-                )
-
-            return CommandExecutionResult(
-                runtime=self.runtime,
-                command=command,
-                success=True,
-                message="Reader stopped and Odoo ACK accepted.",
-            )
-
         except Exception as exc:
-            self.runtime = self.runtime.mark_degraded(str(exc))
+            self.runtime = (
+                self.runtime.mark_degraded(
+                    str(exc)
+                )
+            )
 
             try:
                 self.api_client.ack(
@@ -260,6 +326,37 @@ class FinalRuntimeOrchestrator:
                 message=str(exc),
             )
 
+        self.runtime = (
+            self.runtime.mark_command_completed(
+                command
+            )
+        )
+
+        try:
+            self._send_completed_success_ack(
+                command=command,
+            )
+        except Exception as exc:
+            return CommandExecutionResult(
+                runtime=self.runtime,
+                command=command,
+                success=False,
+                message=(
+                    "Reader stopped successfully but "
+                    "Odoo ACK is pending: "
+                    f"{exc}"
+                ),
+            )
+
+        return CommandExecutionResult(
+            runtime=self.runtime,
+            command=command,
+            success=True,
+            message=(
+                "Reader stopped and Odoo ACK accepted."
+            ),
+        )
+
     def _execute_abort(
         self,
         *,
@@ -274,7 +371,9 @@ class FinalRuntimeOrchestrator:
                 reader_code=command.reader_code,
             )
 
-            self.runtime = self.runtime.mark_reader_stopped()
+            self.runtime = (
+                self.runtime.mark_reader_stopped()
+            )
 
             if self.before_session_close is not None:
                 self.before_session_close(
@@ -290,29 +389,12 @@ class FinalRuntimeOrchestrator:
             except FinalSessionError:
                 pass
 
-            ack_result = self.api_client.ack(
-                session_key=command.session_key,
-                reader_code=command.reader_code,
-                command=command.command.value,
-                revision=command.revision,
-                success=True,
-                message="Reader abort completed.",
-            )
-
-            if not ack_result.get("ok"):
-                raise FinalRuntimeOrchestratorError(
-                    "Odoo did not accept ABORT ACK."
-                )
-
-            return CommandExecutionResult(
-                runtime=self.runtime,
-                command=command,
-                success=True,
-                message="Abort completed safely.",
-            )
-
         except Exception as exc:
-            self.runtime = self.runtime.mark_degraded(str(exc))
+            self.runtime = (
+                self.runtime.mark_degraded(
+                    str(exc)
+                )
+            )
 
             return CommandExecutionResult(
                 runtime=self.runtime,
@@ -320,6 +402,35 @@ class FinalRuntimeOrchestrator:
                 success=False,
                 message=str(exc),
             )
+
+        self.runtime = (
+            self.runtime.mark_command_completed(
+                command
+            )
+        )
+
+        try:
+            self._send_completed_success_ack(
+                command=command,
+            )
+        except Exception as exc:
+            return CommandExecutionResult(
+                runtime=self.runtime,
+                command=command,
+                success=False,
+                message=(
+                    "Reader abort completed but "
+                    "Odoo ACK is pending: "
+                    f"{exc}"
+                ),
+            )
+
+        return CommandExecutionResult(
+            runtime=self.runtime,
+            command=command,
+            success=True,
+            message="Abort completed safely.",
+        )
 
     def _reject_command(
         self,
