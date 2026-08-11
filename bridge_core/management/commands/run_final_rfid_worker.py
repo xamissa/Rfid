@@ -91,17 +91,6 @@ class Command(BaseCommand):
                 "Final RFID reader must use active inventory mode."
             )
 
-        existing_active = RFIDSession.objects.filter(
-            device=device,
-            status=RFIDSession.Status.ACTIVE,
-        ).count()
-
-        if existing_active:
-            raise CommandError(
-                "Final RFID reader has a stale active local session. "
-                "Recovery is required before the worker may start."
-            )
-
         api_client = OdooRFIDApiClient(
             base_url=configuration.odoo_base_url,
             bearer_token=configuration.bearer_token,
@@ -142,8 +131,22 @@ class Command(BaseCommand):
             "RFID_FINAL_WORKER_STARTUP_STATE=offline"
         )
 
-        # Physical STOP + ACK establishes a known idle state.
+        # Always establish a physically safe idle state before deciding
+        # whether a stale local session requires operator recovery.
         reader_executor.verify_idle()
+
+        existing_active = RFIDSession.objects.filter(
+            device=device,
+            status=RFIDSession.Status.ACTIVE,
+        ).count()
+
+        if existing_active:
+            raise CommandError(
+                "Final RFID reader was forced to a verified idle state, "
+                "but a stale active local session remains. "
+                "Recovery is required before the worker may start."
+            )
+
         orchestrator.mark_reader_verified_idle()
 
         self.stdout.write(
