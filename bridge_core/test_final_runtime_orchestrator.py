@@ -291,3 +291,91 @@ class FinalRuntimeOrchestratorTests(TestCase):
             self.reader_executor.starts,
             [],
         )
+
+
+class FinalRuntimePreCloseHookTests(TestCase):
+    def setUp(self):
+        self.reader = ReaderDevice.objects.create(
+            code="receiving-door-01",
+            name="Receiving Door 1",
+            role=ReaderDevice.Role.RECEIVING,
+            host="192.168.1.201",
+            port=8090,
+            device_address=2,
+            enabled=True,
+        )
+
+        self.api = FakeApiClient()
+        self.executor = FakeReaderExecutor()
+        self.hook_calls = []
+
+        self.orchestrator = FinalRuntimeOrchestrator(
+            api_client=self.api,
+            reader_executor=self.executor,
+            before_session_close=self.before_close,
+        )
+
+        self.orchestrator.mark_reader_verified_idle()
+
+    def before_close(
+        self,
+        *,
+        session_key,
+        reader_code,
+    ):
+        session = RFIDSession.objects.get(
+            external_session_key=session_key
+        )
+
+        self.assertEqual(
+            session.status,
+            RFIDSession.Status.ACTIVE,
+        )
+
+        self.hook_calls.append(
+            (session_key, reader_code)
+        )
+
+    def test_stop_hook_runs_before_local_session_closes(self):
+        self.api.command_payloads = [
+            {
+                "session_key": "session-hook",
+                "reader_code": "receiving-door-01",
+                "command": "start",
+                "revision": 1,
+                "picking": "EXWS1/IN/02227",
+            }
+        ]
+        self.orchestrator.poll_commands()
+
+        self.api.command_payloads = [
+            {
+                "session_key": "session-hook",
+                "reader_code": "receiving-door-01",
+                "command": "stop",
+                "revision": 2,
+                "picking": "EXWS1/IN/02227",
+            }
+        ]
+
+        result = self.orchestrator.poll_commands()
+
+        self.assertTrue(result[0].success)
+        self.assertEqual(
+            self.hook_calls,
+            [
+                (
+                    "session-hook",
+                    "receiving-door-01",
+                )
+            ],
+        )
+
+        session = RFIDSession.objects.get(
+            external_session_key="session-hook"
+        )
+
+        self.assertEqual(
+            session.status,
+            RFIDSession.Status.CLOSED,
+        )

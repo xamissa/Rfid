@@ -35,9 +35,11 @@ class FinalRuntimeOrchestrator:
         api_client,
         reader_executor,
         reader_code=FINAL_RECEIVING_READER_CODE,
+        before_session_close=None,
     ):
         self.api_client = api_client
         self.reader_executor = reader_executor
+        self.before_session_close = before_session_close
         self.runtime = LocalReaderRuntime(
             reader_code=reader_code,
             state=RuntimeState.OFFLINE,
@@ -204,6 +206,12 @@ class FinalRuntimeOrchestrator:
 
             self.runtime = self.runtime.mark_reader_stopped()
 
+            if self.before_session_close is not None:
+                self.before_session_close(
+                    session_key=command.session_key,
+                    reader_code=command.reader_code,
+                )
+
             close_local_session(
                 session_key=command.session_key,
                 reader_code=command.reader_code,
@@ -267,6 +275,12 @@ class FinalRuntimeOrchestrator:
             )
 
             self.runtime = self.runtime.mark_reader_stopped()
+
+            if self.before_session_close is not None:
+                self.before_session_close(
+                    session_key=command.session_key,
+                    reader_code=command.reader_code,
+                )
 
             try:
                 cancel_local_session(
