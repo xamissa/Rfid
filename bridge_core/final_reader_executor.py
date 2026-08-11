@@ -342,6 +342,11 @@ class PersistentActiveReaderExecutor:
             self.close()
 
     def poll_tag_frames(self):
+        pending = self.take_pending_tag_frames()
+
+        if pending:
+            return pending
+
         if not self.is_active:
             return ()
 

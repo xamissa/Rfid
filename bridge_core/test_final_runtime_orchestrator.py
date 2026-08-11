@@ -41,6 +41,15 @@ class FakeReaderExecutor:
         self.stops = []
         self.fail_start = False
         self.fail_stop = False
+        self._active_session_key = None
+
+    @property
+    def is_active(self):
+        return self._active_session_key is not None
+
+    @property
+    def active_session_key(self):
+        return self._active_session_key
 
     def start(self, *, session_key, reader_code):
         if self.fail_start:
@@ -49,6 +58,7 @@ class FakeReaderExecutor:
         self.starts.append(
             (session_key, reader_code)
         )
+        self._active_session_key = session_key
 
     def stop(self, *, session_key, reader_code):
         if self.fail_stop:
@@ -57,6 +67,7 @@ class FakeReaderExecutor:
         self.stops.append(
             (session_key, reader_code)
         )
+        self._active_session_key = None
 
 
 class FinalRuntimeOrchestratorTests(TestCase):
@@ -604,4 +615,121 @@ class FinalRuntimeLostAckRecoveryTests(TestCase):
         )
         self.assertTrue(
             self.api.acks[-1]["success"]
+        )
+
+
+class FinalRuntimeCaptureHookTests(TestCase):
+    def setUp(self):
+        self.reader = ReaderDevice.objects.create(
+            code="receiving-door-01",
+            name="Receiving Door 1",
+            role=ReaderDevice.Role.RECEIVING,
+            host="192.168.1.201",
+            port=8090,
+            device_address=2,
+            enabled=True,
+        )
+
+        self.api = FakeApiClient()
+        self.executor = FakeReaderExecutor()
+        self.start_capture_calls = []
+        self.stop_capture_calls = []
+
+        self.orchestrator = FinalRuntimeOrchestrator(
+            api_client=self.api,
+            reader_executor=self.executor,
+            after_reader_start=self.after_start,
+            before_reader_stop=self.before_stop,
+        )
+
+        self.orchestrator.mark_reader_verified_idle()
+
+    def after_start(
+        self,
+        *,
+        session_key,
+        reader_code,
+    ):
+        self.start_capture_calls.append(
+            (session_key, reader_code)
+        )
+
+    def before_stop(
+        self,
+        *,
+        session_key,
+        reader_code,
+    ):
+        self.stop_capture_calls.append(
+            (session_key, reader_code)
+        )
+
+    def start_payload(self):
+        return {
+            "session_key": "capture-session",
+            "reader_code": "receiving-door-01",
+            "command": "start",
+            "revision": 1,
+            "picking": "EXWS1/IN/02227",
+        }
+
+    def stop_payload(self):
+        return {
+            "session_key": "capture-session",
+            "reader_code": "receiving-door-01",
+            "command": "stop",
+            "revision": 2,
+            "picking": "EXWS1/IN/02227",
+        }
+
+    def test_capture_starts_before_start_success_returns(self):
+        self.api.command_payloads = [
+            self.start_payload()
+        ]
+
+        result = self.orchestrator.poll_commands()
+
+        self.assertTrue(result[0].success)
+
+        self.assertEqual(
+            self.start_capture_calls,
+            [
+                (
+                    "capture-session",
+                    "receiving-door-01",
+                )
+            ],
+        )
+
+    def test_capture_relinquishes_reader_before_physical_stop(self):
+        self.api.command_payloads = [
+            self.start_payload()
+        ]
+        self.orchestrator.poll_commands()
+
+        self.api.command_payloads = [
+            self.stop_payload()
+        ]
+        result = self.orchestrator.poll_commands()
+
+        self.assertTrue(result[0].success)
+
+        self.assertEqual(
+            self.stop_capture_calls,
+            [
+                (
+                    "capture-session",
+                    "receiving-door-01",
+                )
+            ],
+        )
+
+        self.assertEqual(
+            self.executor.stops,
+            [
+                (
+                    "capture-session",
+                    "receiving-door-01",
+                )
+            ],
         )

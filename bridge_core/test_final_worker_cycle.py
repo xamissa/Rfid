@@ -228,3 +228,107 @@ class FinalWorkerCycleTests(SimpleTestCase):
             self.reader.polled,
             ["must-not-be-read"],
         )
+
+
+class FakeCaptureService:
+    def __init__(self):
+        self.start_calls = []
+        self.stop_calls = 0
+        self.health_checks = 0
+        self.session_key = None
+
+    def start(
+        self,
+        *,
+        session_key,
+        reader_code,
+    ):
+        self.session_key = session_key
+        self.start_calls.append(
+            (session_key, reader_code)
+        )
+
+    def stop(self):
+        self.stop_calls += 1
+        self.session_key = None
+
+    def require_healthy(self):
+        self.health_checks += 1
+        return True
+
+
+class FinalWorkerBackgroundCaptureCycleTests(
+    SimpleTestCase
+):
+    def setUp(self):
+        self.device = SimpleNamespace(
+            code="receiving-door-01"
+        )
+        self.orchestrator = FakeOrchestrator()
+        self.reader = FakeReaderExecutor()
+        self.ingestor = RecordingTagIngestor()
+        self.capture = FakeCaptureService()
+
+        self.worker = FinalWorkerCycle(
+            orchestrator=self.orchestrator,
+            reader_executor=self.reader,
+            device=self.device,
+            tag_ingestor=self.ingestor,
+            capture_service=self.capture,
+        )
+
+    def test_background_capture_owns_reader_polling(self):
+        self.orchestrator.runtime = LocalReaderRuntime(
+            reader_code="receiving-door-01",
+            state=RuntimeState.READING,
+            session_key="session-001",
+            last_command_revision=1,
+            error=None,
+        )
+
+        self.reader.polled = [
+            "must-not-be-polled-by-control-thread"
+        ]
+
+        result = self.worker.run_once()
+
+        self.assertEqual(
+            result.tag_frames_received,
+            0,
+        )
+
+        self.assertEqual(
+            self.reader.polled,
+            ["must-not-be-polled-by-control-thread"],
+        )
+
+        self.assertGreaterEqual(
+            self.capture.health_checks,
+            2,
+        )
+
+    def test_capture_start_and_stop_delegate_session_identity(self):
+        self.worker.start_capture(
+            session_key="session-001",
+            reader_code="receiving-door-01",
+        )
+
+        self.assertEqual(
+            self.capture.start_calls,
+            [
+                (
+                    "session-001",
+                    "receiving-door-01",
+                )
+            ],
+        )
+
+        self.worker.stop_capture(
+            session_key="session-001",
+            reader_code="receiving-door-01",
+        )
+
+        self.assertEqual(
+            self.capture.stop_calls,
+            1,
+        )

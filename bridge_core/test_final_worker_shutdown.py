@@ -19,7 +19,8 @@ class FinalWorkerControlledShutdownTests(SimpleTestCase):
         )
 
         worker = SimpleNamespace(
-            drain_pending_tags=Mock()
+            stop_capture=Mock(),
+            drain_pending_tags=Mock(),
         )
 
         result = Command._safe_shutdown_reader(
@@ -42,7 +43,8 @@ class FinalWorkerControlledShutdownTests(SimpleTestCase):
         )
 
         worker = SimpleNamespace(
-            drain_pending_tags=Mock()
+            stop_capture=Mock(),
+            drain_pending_tags=Mock(),
         )
 
         result = Command._safe_shutdown_reader(
@@ -72,7 +74,8 @@ class FinalWorkerControlledShutdownTests(SimpleTestCase):
         )
 
         worker = SimpleNamespace(
-            drain_pending_tags=Mock()
+            stop_capture=Mock(),
+            drain_pending_tags=Mock(),
         )
 
         with self.assertRaisesMessage(
@@ -102,7 +105,8 @@ class FinalWorkerControlledShutdownTests(SimpleTestCase):
         )
 
         worker = SimpleNamespace(
-            drain_pending_tags=Mock()
+            stop_capture=Mock(),
+            drain_pending_tags=Mock(),
         )
 
         with self.assertRaisesMessage(
@@ -126,11 +130,12 @@ class FinalWorkerControlledShutdownTests(SimpleTestCase):
         )
 
         worker = SimpleNamespace(
+            stop_capture=Mock(),
             drain_pending_tags=Mock(
                 side_effect=RuntimeError(
                     "simulated persistence failure"
                 )
-            )
+            ),
         )
 
         with self.assertRaisesMessage(

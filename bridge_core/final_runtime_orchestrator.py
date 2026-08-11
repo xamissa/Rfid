@@ -35,11 +35,15 @@ class FinalRuntimeOrchestrator:
         api_client,
         reader_executor,
         reader_code=FINAL_RECEIVING_READER_CODE,
+        after_reader_start=None,
+        before_reader_stop=None,
         before_session_close=None,
         before_success_ack=None,
     ):
         self.api_client = api_client
         self.reader_executor = reader_executor
+        self.after_reader_start = after_reader_start
+        self.before_reader_stop = before_reader_stop
         self.before_session_close = before_session_close
         self.before_success_ack = before_success_ack
         self.runtime = LocalReaderRuntime(
@@ -227,8 +231,37 @@ class FinalRuntimeOrchestrator:
                 self.runtime.mark_reader_started()
             )
 
+            if self.after_reader_start is not None:
+                self.after_reader_start(
+                    session_key=command.session_key,
+                    reader_code=command.reader_code,
+                )
+
         except Exception as exc:
             cleanup_error = None
+            stop_error = None
+
+            if self.reader_executor.is_active:
+                try:
+                    if self.before_reader_stop is not None:
+                        self.before_reader_stop(
+                            session_key=command.session_key,
+                            reader_code=command.reader_code,
+                        )
+
+                    self.reader_executor.stop(
+                        session_key=command.session_key,
+                        reader_code=command.reader_code,
+                    )
+
+                    if self.before_session_close is not None:
+                        self.before_session_close(
+                            session_key=command.session_key,
+                            reader_code=command.reader_code,
+                        )
+
+                except Exception as stop_exc:
+                    stop_error = stop_exc
 
             if (
                 session_sync is not None
@@ -243,6 +276,12 @@ class FinalRuntimeOrchestrator:
                     cleanup_error = cleanup_exc
 
             error_message = str(exc)
+
+            if stop_error is not None:
+                error_message = (
+                    f"{error_message}; emergency reader STOP "
+                    f"also failed: {stop_error}"
+                )
 
             if cleanup_error is not None:
                 error_message = (
@@ -316,6 +355,12 @@ class FinalRuntimeOrchestrator:
         self.runtime = planned_runtime
 
         try:
+            if self.before_reader_stop is not None:
+                self.before_reader_stop(
+                    session_key=command.session_key,
+                    reader_code=command.reader_code,
+                )
+
             self.reader_executor.stop(
                 session_key=command.session_key,
                 reader_code=command.reader_code,
@@ -402,6 +447,12 @@ class FinalRuntimeOrchestrator:
         self.runtime = planned_runtime
 
         try:
+            if self.before_reader_stop is not None:
+                self.before_reader_stop(
+                    session_key=command.session_key,
+                    reader_code=command.reader_code,
+                )
+
             self.reader_executor.stop(
                 session_key=command.session_key,
                 reader_code=command.reader_code,

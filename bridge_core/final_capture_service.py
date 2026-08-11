@@ -1,6 +1,8 @@
 import threading
 import time
 
+from django.db import close_old_connections
+
 
 class FinalCaptureServiceError(RuntimeError):
     pass
@@ -138,6 +140,8 @@ class FinalCaptureService:
         self._thread.start()
 
     def _run(self):
+        close_old_connections()
+
         try:
             while not self._stop_event.is_set():
                 frames = tuple(
@@ -162,6 +166,7 @@ class FinalCaptureService:
 
         finally:
             self._stop_event.set()
+            close_old_connections()
 
     def stop(self):
         thread = self._thread

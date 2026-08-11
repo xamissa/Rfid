@@ -7,6 +7,9 @@ from django.core.management.base import (
     CommandError,
 )
 
+from bridge_core.final_capture_service import (
+    FinalCaptureService,
+)
 from bridge_core.final_reader_executor import (
     PersistentActiveReaderExecutor,
 )
@@ -15,6 +18,9 @@ from bridge_core.final_runtime_config import (
 )
 from bridge_core.final_runtime_orchestrator import (
     FinalRuntimeOrchestrator,
+)
+from bridge_core.final_tag_ingestion import (
+    ingest_final_active_tag_frames,
 )
 from bridge_core.final_worker_cycle import (
     FinalWorkerCycle,
@@ -108,6 +114,12 @@ class Command(BaseCommand):
             )
         )
 
+        capture_service = FinalCaptureService(
+            reader_executor=reader_executor,
+            device=device,
+            tag_ingestor=ingest_final_active_tag_frames,
+        )
+
         orchestrator = FinalRuntimeOrchestrator(
             api_client=api_client,
             reader_executor=reader_executor,
@@ -118,6 +130,15 @@ class Command(BaseCommand):
             orchestrator=orchestrator,
             reader_executor=reader_executor,
             device=device,
+            capture_service=capture_service,
+        )
+
+        orchestrator.after_reader_start = (
+            worker.start_capture
+        )
+
+        orchestrator.before_reader_stop = (
+            worker.stop_capture
         )
 
         orchestrator.before_session_close = (
@@ -260,6 +281,7 @@ class Command(BaseCommand):
         reader_code,
     ):
         if not reader_executor.is_active:
+            worker.stop_capture()
             reader_executor.close()
             return False
 
@@ -275,6 +297,11 @@ class Command(BaseCommand):
             )
 
         try:
+            worker.stop_capture(
+                session_key=session_key,
+                reader_code=reader_code,
+            )
+
             reader_executor.stop(
                 session_key=session_key,
                 reader_code=reader_code,
