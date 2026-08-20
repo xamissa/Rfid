@@ -1,3 +1,4 @@
+from io import StringIO
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
@@ -6,6 +7,10 @@ from django.core.management.base import CommandError
 from django.test import TestCase, override_settings
 
 from bridge_core.models import ReaderDevice, RFIDSession
+from bridge_core.odoo_api_v1 import (
+    OdooRFIDApiProtocolError,
+    OdooRFIDApiTransportError,
+)
 
 
 class FinalWorkerCommandSafetyTests(TestCase):
@@ -124,3 +129,148 @@ class FinalWorkerCommandSafetyTests(TestCase):
         mocked_api_client_class.return_value.heartbeat.assert_not_called()
         mocked_api_client_class.return_value.commands.assert_not_called()
         mocked_api_client_class.return_value.ack.assert_not_called()
+
+class FinalWorkerCommandTransportRetryTests(TestCase):
+    def _reader(self):
+        return ReaderDevice.objects.create(
+            code="receiving-door-01",
+            name="Receiving Door 1",
+            role=ReaderDevice.Role.RECEIVING,
+            host="192.168.1.201",
+            port=8090,
+            device_address=2,
+            inventory_mode=ReaderDevice.InventoryMode.ACTIVE,
+            enabled=True,
+        )
+
+    @staticmethod
+    def _configuration():
+        return SimpleNamespace(
+            odoo_base_url="https://example.invalid",
+            bearer_token="a" * 40,
+            gateway_code="RFID-GW-01",
+            reader_code="receiving-door-01",
+            request_timeout_seconds=10,
+            verify_tls=True,
+            poll_seconds=1.0,
+        )
+
+    @override_settings(
+        ALLOW_PHYSICAL_READER_CONTACT=True,
+        ALLOW_ODOO_CONTACT=True,
+        SENDER_BACKEND="disabled",
+    )
+    @patch(
+        "bridge_core.management.commands."
+        "run_final_rfid_worker.time.sleep"
+    )
+    @patch(
+        "bridge_core.management.commands."
+        "run_final_rfid_worker.FinalWorkerCycle"
+    )
+    @patch(
+        "bridge_core.management.commands."
+        "run_final_rfid_worker.PersistentActiveReaderExecutor"
+    )
+    @patch(
+        "bridge_core.management.commands."
+        "run_final_rfid_worker.load_final_runtime_configuration"
+    )
+    def test_continuous_worker_retries_transport_error(
+        self,
+        mocked_load_configuration,
+        mocked_executor_class,
+        mocked_worker_class,
+        mocked_sleep,
+    ):
+        self._reader()
+        mocked_load_configuration.return_value = (
+            self._configuration()
+        )
+
+        executor = Mock()
+        executor.is_active = False
+        mocked_executor_class.return_value = executor
+
+        worker = Mock()
+        worker.run_once.side_effect = [
+            OdooRFIDApiTransportError(
+                "temporary name resolution failure"
+            ),
+            KeyboardInterrupt(),
+        ]
+        mocked_worker_class.return_value = worker
+
+        stdout = StringIO()
+
+        call_command(
+            "run_final_rfid_worker",
+            stdout=stdout,
+        )
+
+        self.assertEqual(
+            worker.run_once.call_count,
+            2,
+        )
+        mocked_sleep.assert_called_once_with(1.0)
+
+        self.assertIn(
+            "RETRY: transient Odoo RFID API transport failure",
+            stdout.getvalue(),
+        )
+        self.assertIn(
+            "HOLD: final RFID worker shutdown requested",
+            stdout.getvalue(),
+        )
+
+    @override_settings(
+        ALLOW_PHYSICAL_READER_CONTACT=True,
+        ALLOW_ODOO_CONTACT=True,
+        SENDER_BACKEND="disabled",
+    )
+    @patch(
+        "bridge_core.management.commands."
+        "run_final_rfid_worker.FinalWorkerCycle"
+    )
+    @patch(
+        "bridge_core.management.commands."
+        "run_final_rfid_worker.PersistentActiveReaderExecutor"
+    )
+    @patch(
+        "bridge_core.management.commands."
+        "run_final_rfid_worker.load_final_runtime_configuration"
+    )
+    def test_protocol_error_still_fails_closed(
+        self,
+        mocked_load_configuration,
+        mocked_executor_class,
+        mocked_worker_class,
+    ):
+        self._reader()
+        mocked_load_configuration.return_value = (
+            self._configuration()
+        )
+
+        executor = Mock()
+        executor.is_active = False
+        mocked_executor_class.return_value = executor
+
+        worker = Mock()
+        worker.run_once.side_effect = (
+            OdooRFIDApiProtocolError(
+                "invalid Odoo response"
+            )
+        )
+        mocked_worker_class.return_value = worker
+
+        with self.assertRaises(
+            OdooRFIDApiProtocolError
+        ):
+            call_command(
+                "run_final_rfid_worker",
+            )
+
+        self.assertEqual(
+            worker.run_once.call_count,
+            1,
+        )

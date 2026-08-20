@@ -31,6 +31,7 @@ from bridge_core.models import (
 )
 from bridge_core.odoo_api_v1 import (
     OdooRFIDApiClient,
+    OdooRFIDApiTransportError,
 )
 
 
@@ -199,7 +200,29 @@ class Command(BaseCommand):
             ):
                 cycle_number += 1
 
-                result = worker.run_once()
+                try:
+                    result = worker.run_once()
+                except OdooRFIDApiTransportError as exc:
+                    # Finite diagnostic/test invocations must remain
+                    # deterministic and fail immediately. The long-running
+                    # production worker retries transient Odoo transport
+                    # failures without relinquishing the physical reader or
+                    # local RFID session.
+                    if max_cycles is not None:
+                        raise
+
+                    self.stdout.write(
+                        self.style.WARNING(
+                            "RETRY: transient Odoo RFID API transport "
+                            "failure; control worker remains running: "
+                            f"{exc}"
+                        )
+                    )
+
+                    time.sleep(
+                        configuration.poll_seconds
+                    )
+                    continue
 
                 self.stdout.write(
                     "CYCLE="
