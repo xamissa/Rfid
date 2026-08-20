@@ -116,13 +116,27 @@ class LocalReaderRuntime:
                 "Command reader identity does not match this runtime."
             )
 
-        if command.revision < self.last_command_revision:
+        revision_session_key = (
+            self.session_key
+            or self.completed_session_key
+        )
+
+        same_revision_session = (
+            revision_session_key is not None
+            and command.session_key == revision_session_key
+        )
+
+        if (
+            same_revision_session
+            and command.revision < self.last_command_revision
+        ):
             raise RuntimeStateError(
                 "Command revision is older than the last processed revision."
             )
 
         if (
-            command.revision == self.last_command_revision
+            same_revision_session
+            and command.revision == self.last_command_revision
             and self.last_command_revision != 0
         ):
             if (

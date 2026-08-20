@@ -241,6 +241,64 @@ class FinalRuntimeStateTests(TestCase):
         )
 
 
+
+    def test_new_idle_session_starts_its_own_revision_sequence(self):
+        runtime = LocalReaderRuntime(
+            reader_code=FINAL_RECEIVING_READER_CODE,
+            state=RuntimeState.IDLE,
+            session_key=None,
+            last_command_revision=3,
+            completed_command_revision=3,
+            completed_command=RuntimeCommand.ABORT,
+            completed_session_key="previous-session",
+        )
+
+        transition = runtime.plan_command(
+            self.make_command(
+                command="start",
+                revision=1,
+                session_key="new-session",
+            )
+        )
+
+        self.assertFalse(transition.duplicate)
+        self.assertEqual(
+            transition.after.state,
+            RuntimeState.STARTING,
+        )
+        self.assertEqual(
+            transition.after.session_key,
+            "new-session",
+        )
+        self.assertEqual(
+            transition.after.last_command_revision,
+            1,
+        )
+
+    def test_old_revision_same_completed_session_still_rejected(self):
+        runtime = LocalReaderRuntime(
+            reader_code=FINAL_RECEIVING_READER_CODE,
+            state=RuntimeState.IDLE,
+            session_key=None,
+            last_command_revision=3,
+            completed_command_revision=3,
+            completed_command=RuntimeCommand.ABORT,
+            completed_session_key="session-001",
+        )
+
+        with self.assertRaisesRegex(
+            RuntimeStateError,
+            "older than the last processed revision",
+        ):
+            runtime.plan_command(
+                self.make_command(
+                    command="start",
+                    revision=2,
+                    session_key="session-001",
+                )
+            )
+
+
 class FinalRuntimeExactDuplicateTests(TestCase):
     def test_same_revision_different_command_is_not_duplicate(self):
         runtime = LocalReaderRuntime(
