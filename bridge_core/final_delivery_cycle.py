@@ -14,6 +14,7 @@ from bridge_core.delivery_cycle import (
 from bridge_core.models import (
     DeliveryAttempt,
     RawRFIDEvent,
+    RFIDSession,
 )
 from bridge_core.queue_service import (
     transition_event_queue_state,
@@ -99,6 +100,58 @@ def select_final_delivery_candidates(
     )
 
     return tuple(candidates)
+
+
+def dead_letter_cancelled_session_final_events(
+    *,
+    reader_code,
+):
+    reader_code = str(
+        reader_code or ""
+    ).strip()
+
+    if not reader_code:
+        raise FinalDeliveryCycleError(
+            "Final RFID reader code cannot be empty."
+        )
+
+    cancelled = tuple(
+        RawRFIDEvent.objects
+        .filter(
+            device__code=reader_code,
+            rfid_session__status=(
+                RFIDSession.Status.CANCELLED
+            ),
+            reader_event_key__startswith="final:",
+            queue_state__in=(
+                RawRFIDEvent.QueueState.QUEUED,
+                RawRFIDEvent.QueueState.RETRY,
+            ),
+        )
+        .values_list(
+            "event_id",
+            "queue_state",
+        )
+    )
+
+    dead_count = 0
+
+    for event_id, queue_state in cancelled:
+        try:
+            transition_event_queue_state(
+                event_id=event_id,
+                expected_state=queue_state,
+                target_state=(
+                    RawRFIDEvent.QueueState.DEAD
+                ),
+            )
+        except ValueError:
+            # Another worker may have changed the state after selection.
+            continue
+
+        dead_count += 1
+
+    return dead_count
 
 
 def dead_letter_exhausted_final_events(
@@ -193,6 +246,10 @@ def run_final_delivery_cycle(
         raise ValueError(
             "Maximum delivery attempts must be at least 1."
         )
+
+    dead_letter_cancelled_session_final_events(
+        reader_code=reader_code,
+    )
 
     exhausted_dead_count = (
         dead_letter_exhausted_final_events(
