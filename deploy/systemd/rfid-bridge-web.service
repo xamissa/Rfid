@@ -24,7 +24,7 @@ ExecStart=/opt/rfid_bridge/venv/bin/gunicorn \
     --access-logfile - \
     --error-logfile - \
     --capture-output \
-    --timeout 30 \
+    --timeout 45 \
     config.wsgi:application
 
 Restart=on-failure
