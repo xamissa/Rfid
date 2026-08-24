@@ -4,9 +4,20 @@ Python and Django bridge for forwarding fixed-reader RFID events to Odoo through
 
 ## Current status
 
-The application foundation, local database, authenticated web interface, monitoring pages, deployment scripts, and offline worker paths are implemented.
+The Raspberry Pi bridge, local PostgreSQL persistence, authenticated Django web interface, fixed-reader integration, durable RFID event delivery, and Odoo RFID API integration are implemented.
 
-Physical reader and Odoo integrations remain disabled until their technical contracts are confirmed and controlled tests pass.
+The Odoo 18 Receiving POC has been proven end-to-end on staging using a physical fixed RFID reader:
+
+- Odoo Receipt controls the RFID session
+- START and STOP commands are executed against the physical reader
+- EPC observations are persisted locally before delivery
+- observations are delivered asynchronously to Odoo
+- Odoo reconciles EPCs against the expected Receipt
+- clean results are applied to native Odoo transfer quantities
+- the operator performs the normal Odoo Validate action
+- validated stock is posted through normal Odoo stock moves
+
+Dispatch support exists in the architecture and codebase but still requires Door 2 commissioning and end-to-end acceptance testing.
 
 ## Safe default state
 
@@ -30,4 +41,8 @@ rfid-bridge-worker.service: inactive and disabled
 
 ## Important
 
-Do not enable the worker or either external integration until explicit approval is given.
+Fresh installations intentionally start fail-closed with physical-reader and Odoo contact disabled.
+
+Do not copy live credentials into Git. Configure and commission each target Pi deliberately before enabling external contact.
+
+The legacy `rfid-bridge-worker.service` remains disabled. The final RFID control and delivery workers are separate runtime components.

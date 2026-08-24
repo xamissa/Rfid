@@ -4,12 +4,25 @@ Use this checklist before handing the RFID Bridge package to another installer o
 
 ## Proven current state
 
-Confirm all of the following:
+The commissioned Receiving POC has demonstrated:
+
+- physical fixed-reader START and STOP control
+- durable local EPC persistence
+- asynchronous RFID event delivery to Odoo
+- Odoo-owned RFID session lifecycle
+- EPC-to-product registry resolution
+- clean expected/matched reconciliation
+- automatic application of clean RFID results to native transfer quantities
+- normal operator-controlled Odoo Validate
+- completed normal Odoo stock movement into the destination location
+- reader returning to idle after the session
+
+Also confirm:
 
 - Django application checks pass
 - Nginx configuration validates
 - web service is active and enabled
-- worker service is inactive and disabled
+- legacy worker service is inactive and disabled
 - dashboard requires authentication
 - login page loads successfully
 - reader configuration pages load
@@ -66,15 +79,15 @@ The receiving installer or developer must:
 
 1. Install on the correct target Pi and network.
 2. Generate new local secrets.
-3. Keep all integrations disabled during installation.
+3. Keep all integrations disabled during initial installation.
 4. Create a new administrator account.
 5. Run the complete installation verifier.
 6. Confirm the web interface is protected by login.
-7. Collect the missing reader contract details.
-8. Collect the missing Odoo contract details.
-9. Follow staged hardware testing.
-10. Follow staged Odoo testing.
-11. Obtain explicit approval before enabling the worker.
+7. Configure the target reader and door identity.
+8. Configure the target Odoo URL, gateway/reader codes, and dedicated API credential.
+9. Follow staged hardware commissioning.
+10. Follow staged Odoo commissioning.
+11. Verify the final control and delivery workers before enabling persistent execution.
 
 ## Final handover evidence
 
@@ -105,5 +118,6 @@ The package is ready for handover only when:
 - the package checksum is recorded
 - known outstanding hardware and Odoo work is stated clearly
 
-The package is not proof that physical reader or Odoo integration works.
-Those integrations remain pending until their contracts are supplied and controlled tests pass.
+The repository contains the implementation that has passed the Receiving POC on the commissioned staging environment.
+
+This does not mean an arbitrary new Pi, reader, Odoo database, or Dispatch door is automatically commissioned. Each target deployment must still be configured and verified before external integrations are enabled.

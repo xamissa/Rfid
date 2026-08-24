@@ -2,6 +2,26 @@
 
 This guide defines the safe process for implementing and validating delivery from the RFID Bridge to Odoo.
 
+## Current acceptance status
+
+The Receiving integration has passed controlled end-to-end testing against Odoo 18 staging.
+
+Proven behaviour:
+- Odoo controls the RFID session
+- physical reader START and STOP are acknowledged
+- EPC observations are persisted locally
+- events are delivered asynchronously to Odoo
+- Odoo reconciles expected versus observed EPCs
+- clean results update native transfer quantities
+- the operator performs the normal Odoo Validate action
+- normal Odoo stock movement completes the Receipt
+
+RFID does not auto-validate the transfer and does not directly adjust stock quants.
+
+Dispatch still requires separate Door 2 commissioning and acceptance.
+
+The staged procedures below remain required for new or uncommissioned environments.
+
 ## Safety boundary
 
 Do not allow the bridge to contact Odoo until the endpoint, authentication, and message contracts are confirmed.

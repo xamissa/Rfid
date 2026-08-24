@@ -49,26 +49,21 @@ Real Odoo contact is blocked unless both conditions are true:
 Changing only an allow flag is not sufficient to activate an integration.
 Changing only a backend selector is also not sufficient.
 
-Do not enable either integration until its contract has been implemented and tested.
+On a fresh installation, do not enable either integration until its configuration has been reviewed and the target environment has been approved.
+
+The Receiving POC reader and Odoo contracts have been implemented and tested on the commissioned staging Pi.
 
 ## Reader settings in the web interface
 
 Reader records are configured from the Readers page.
 
-Each reader currently includes:
-
-- unique code
-- descriptive name
-- operational role
-- enabled or disabled state
-- notes
+Reader records include the operational information required by the fixed-reader integration, including reader identity, receiving/dispatch role, enabled state, connection details, and active reader behaviour.
 
 Reader roles distinguish receiving and dispatch doors.
 
-Leave a reader disabled until its physical connection details and protocol are implemented.
+The commissioned Receiving reader uses the active TCP backend.
 
-The current reader record does not yet store network address, port, or protocol settings.
-Those fields must be added only after the actual hardware contract is confirmed.
+A new reader should remain disabled until its network address, port, protocol settings, antenna/door assignment, and physical behaviour have been verified.
 
 ## Operational settings in the web interface
 

@@ -2,6 +2,22 @@
 
 This guide defines the safe process for connecting and validating a physical RFID reader.
 
+## Current acceptance status
+
+The Receiving fixed reader has been commissioned successfully using the active TCP reader backend.
+
+Controlled testing has proven:
+- physical reader START control
+- active EPC capture
+- durable local EPC persistence
+- physical reader STOP control
+- reader return to idle
+- controlled recovery after interrupted/stale sessions
+
+Door 2 / Dispatch still requires separate physical commissioning.
+
+The staged procedures below remain required for new or uncommissioned reader installations.
+
 ## Safety boundary
 
 Do not connect the bridge to a physical reader until the reader protocol and network details are confirmed.

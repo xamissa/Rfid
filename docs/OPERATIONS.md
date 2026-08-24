@@ -2,6 +2,18 @@
 
 This guide covers routine checks, service state, monitoring, and safe recovery actions.
 
+## Commissioned Receiving POC
+
+The Receiving POC has completed physical-reader-to-Odoo end-to-end acceptance on Odoo 18 staging.
+
+The legacy `rfid-bridge-worker.service` remains disabled.
+
+The final runtime uses `run_final_rfid_worker` and `run_final_rfid_delivery_worker`.
+
+During the current commissioning phase these final workers may be run deliberately under the `rfidbridge` account rather than enabled as persistent systemd services.
+
+The safe setup state below still applies to a fresh installation before commissioning.
+
 ## Normal operating state during setup
 
 Before hardware and Odoo integrations are approved, the required state is:
