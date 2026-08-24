@@ -41,6 +41,8 @@ for PATH_ITEM in \
     /var/log/rfid_bridge \
     /etc/systemd/system/rfid-bridge-web.service \
     /etc/systemd/system/rfid-bridge-worker.service \
+    /etc/systemd/system/rfid-final-worker.service \
+    /etc/systemd/system/rfid-final-delivery.service \
     /etc/nginx/sites-available/rfid-bridge \
     /etc/nginx/sites-enabled/rfid-bridge
 do
@@ -200,7 +202,9 @@ echo "===== 6. SYSTEMD AND NGINX ====="
 
 systemd-analyze verify \
     /etc/systemd/system/rfid-bridge-web.service \
-    /etc/systemd/system/rfid-bridge-worker.service
+    /etc/systemd/system/rfid-bridge-worker.service \
+    /etc/systemd/system/rfid-final-worker.service \
+    /etc/systemd/system/rfid-final-delivery.service
 SYSTEMD_VERIFY_RC=$?
 
 nginx -t
@@ -221,6 +225,10 @@ WEB_ACTIVE="$(systemctl is-active rfid-bridge-web.service)"
 WEB_ENABLED="$(systemctl is-enabled rfid-bridge-web.service)"
 WORKER_ACTIVE="$(systemctl is-active rfid-bridge-worker.service)"
 WORKER_ENABLED="$(systemctl is-enabled rfid-bridge-worker.service)"
+FINAL_WORKER_ACTIVE="$(systemctl is-active rfid-final-worker.service)"
+FINAL_WORKER_ENABLED="$(systemctl is-enabled rfid-final-worker.service)"
+FINAL_DELIVERY_ACTIVE="$(systemctl is-active rfid-final-delivery.service)"
+FINAL_DELIVERY_ENABLED="$(systemctl is-enabled rfid-final-delivery.service)"
 NGINX_ACTIVE="$(systemctl is-active nginx)"
 NGINX_ENABLED="$(systemctl is-enabled nginx)"
 
@@ -228,6 +236,10 @@ echo "WEB_ACTIVE=$WEB_ACTIVE"
 echo "WEB_ENABLED=$WEB_ENABLED"
 echo "WORKER_ACTIVE=$WORKER_ACTIVE"
 echo "WORKER_ENABLED=$WORKER_ENABLED"
+echo "FINAL_WORKER_ACTIVE=$FINAL_WORKER_ACTIVE"
+echo "FINAL_WORKER_ENABLED=$FINAL_WORKER_ENABLED"
+echo "FINAL_DELIVERY_ACTIVE=$FINAL_DELIVERY_ACTIVE"
+echo "FINAL_DELIVERY_ENABLED=$FINAL_DELIVERY_ENABLED"
 echo "NGINX_ACTIVE=$NGINX_ACTIVE"
 echo "NGINX_ENABLED=$NGINX_ENABLED"
 
@@ -239,7 +251,11 @@ if [ "$WEB_ACTIVE" != "active" ] || \
 fi
 
 if [ "$WORKER_ACTIVE" != "inactive" ] || \
-   [ "$WORKER_ENABLED" != "disabled" ]; then
+   [ "$WORKER_ENABLED" != "disabled" ] || \
+   [ "$FINAL_WORKER_ACTIVE" != "inactive" ] || \
+   [ "$FINAL_WORKER_ENABLED" != "disabled" ] || \
+   [ "$FINAL_DELIVERY_ACTIVE" != "inactive" ] || \
+   [ "$FINAL_DELIVERY_ENABLED" != "disabled" ]; then
     FAIL=1
 fi
 
@@ -272,9 +288,9 @@ echo "===== CONCLUSION ====="
 if [ "$FAIL" -eq 0 ]; then
     echo "PASS: RFID Bridge installation is healthy."
     echo "PASS: Web and Nginx are operational."
-    echo "PASS: Worker remains disabled and inactive."
+    echo "PASS: Legacy and final RFID worker services remain disabled and inactive."
     echo "PASS: Reader and Odoo contact remain blocked."
-    echo "HOLD: Real integration testing still requires approval."
+    echo "HOLD: Commission each target reader/Odoo environment before enabling final workers."
 else
     echo "FAIL: RFID Bridge installation verification failed."
     exit 1

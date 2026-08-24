@@ -124,12 +124,26 @@ READER_BACKEND=fake
 SENDER_BACKEND=disabled
 ALLOW_PHYSICAL_READER_CONTACT=false
 ALLOW_ODOO_CONTACT=false
+
+# Final RFID runtime starts with non-live placeholder values.
+# Replace these deliberately during commissioning or restore them
+# from a protected disaster-recovery configuration set.
+RFID_ODOO_BASE_URL=https://example.invalid
+RFID_GATEWAY_CODE=RFID-GW-01
+RFID_READER_CODE=receiving-door-01
+RFID_CONTROL_POLL_SECONDS=1.0
+RFID_ODOO_REQUEST_TIMEOUT_SECONDS=10
+RFID_ODOO_VERIFY_TLS=true
 EOF_APP
 
 cat > "$CONFIG_DIR/secrets.env" <<EOF_SECRETS
 DJANGO_SECRET_KEY=$DJANGO_SECRET
 POSTGRES_PASSWORD=$DB_PASSWORD
 ODOO_CREDENTIAL_ENCRYPTION_KEY=$ODOO_ENCRYPTION_KEY
+
+# Non-live placeholder. Replace only during commissioning or
+# restore the matching protected value from a DR backup set.
+RFID_ODOO_BEARER_TOKEN=REPLACE_WITH_ODOO_RFID_API_BEARER_TOKEN
 EOF_SECRETS
 
 chown root:"$SERVICE_GROUP" \

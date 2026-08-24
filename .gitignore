@@ -10,3 +10,16 @@ media/
 .pytest_cache/
 .ruff_cache/
 *.sqlite3
+
+# Disaster-recovery artefacts must never be committed.
+*.dump
+*.backup
+*.pgdump
+*.tar
+*.tar.gz
+*.tgz
+*.zip
+SHA256SUMS
+MANIFEST.txt
+deploy/recovery/backups/
+deploy/recovery/output/
