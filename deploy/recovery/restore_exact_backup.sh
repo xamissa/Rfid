@@ -10,6 +10,8 @@ WEB_SERVICE="rfid-bridge-web.service"
 LEGACY_WORKER="rfid-bridge-worker.service"
 FINAL_WORKER="rfid-final-worker.service"
 FINAL_DELIVERY="rfid-final-delivery.service"
+DISPATCH_WORKER="rfid-final-dispatch-worker.service"
+DISPATCH_DELIVERY="rfid-final-dispatch-delivery.service"
 
 BACKUP_DIR="${1:-}"
 CONFIRM="${CONFIRM_EXACT_RESTORE:-NO}"
@@ -112,6 +114,8 @@ echo "===== STOP APPLICATION SERVICES ====="
 
 systemctl stop "$FINAL_WORKER" 2>/dev/null || true
 systemctl stop "$FINAL_DELIVERY" 2>/dev/null || true
+systemctl stop "$DISPATCH_WORKER" 2>/dev/null || true
+systemctl stop "$DISPATCH_DELIVERY" 2>/dev/null || true
 systemctl stop "$LEGACY_WORKER" 2>/dev/null || true
 systemctl stop "$WEB_SERVICE" 2>/dev/null || true
 
@@ -213,10 +217,14 @@ echo "===== SAFE POST-RESTORE SERVICE STATE ====="
 systemctl disable "$LEGACY_WORKER" 2>/dev/null || true
 systemctl disable "$FINAL_WORKER" 2>/dev/null || true
 systemctl disable "$FINAL_DELIVERY" 2>/dev/null || true
+systemctl disable "$DISPATCH_WORKER" 2>/dev/null || true
+systemctl disable "$DISPATCH_DELIVERY" 2>/dev/null || true
 
 echo "LEGACY_WORKER_ACTIVE=$(systemctl is-active "$LEGACY_WORKER" 2>/dev/null || true)"
 echo "FINAL_WORKER_ACTIVE=$(systemctl is-active "$FINAL_WORKER" 2>/dev/null || true)"
 echo "FINAL_DELIVERY_ACTIVE=$(systemctl is-active "$FINAL_DELIVERY" 2>/dev/null || true)"
+echo "DISPATCH_WORKER_ACTIVE=$(systemctl is-active "$DISPATCH_WORKER" 2>/dev/null || true)"
+echo "DISPATCH_DELIVERY_ACTIVE=$(systemctl is-active "$DISPATCH_DELIVERY" 2>/dev/null || true)"
 
 echo
 echo "IMPORTANT:"

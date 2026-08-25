@@ -43,6 +43,8 @@ for PATH_ITEM in \
     /etc/systemd/system/rfid-bridge-worker.service \
     /etc/systemd/system/rfid-final-worker.service \
     /etc/systemd/system/rfid-final-delivery.service \
+    /etc/systemd/system/rfid-final-dispatch-worker.service \
+    /etc/systemd/system/rfid-final-dispatch-delivery.service \
     /etc/nginx/sites-available/rfid-bridge \
     /etc/nginx/sites-enabled/rfid-bridge
 do
@@ -204,7 +206,9 @@ systemd-analyze verify \
     /etc/systemd/system/rfid-bridge-web.service \
     /etc/systemd/system/rfid-bridge-worker.service \
     /etc/systemd/system/rfid-final-worker.service \
-    /etc/systemd/system/rfid-final-delivery.service
+    /etc/systemd/system/rfid-final-delivery.service \
+    /etc/systemd/system/rfid-final-dispatch-worker.service \
+    /etc/systemd/system/rfid-final-dispatch-delivery.service
 SYSTEMD_VERIFY_RC=$?
 
 nginx -t
@@ -229,6 +233,10 @@ FINAL_WORKER_ACTIVE="$(systemctl is-active rfid-final-worker.service)"
 FINAL_WORKER_ENABLED="$(systemctl is-enabled rfid-final-worker.service)"
 FINAL_DELIVERY_ACTIVE="$(systemctl is-active rfid-final-delivery.service)"
 FINAL_DELIVERY_ENABLED="$(systemctl is-enabled rfid-final-delivery.service)"
+DISPATCH_WORKER_ACTIVE="$(systemctl is-active rfid-final-dispatch-worker.service)"
+DISPATCH_WORKER_ENABLED="$(systemctl is-enabled rfid-final-dispatch-worker.service)"
+DISPATCH_DELIVERY_ACTIVE="$(systemctl is-active rfid-final-dispatch-delivery.service)"
+DISPATCH_DELIVERY_ENABLED="$(systemctl is-enabled rfid-final-dispatch-delivery.service)"
 NGINX_ACTIVE="$(systemctl is-active nginx)"
 NGINX_ENABLED="$(systemctl is-enabled nginx)"
 
@@ -240,6 +248,10 @@ echo "FINAL_WORKER_ACTIVE=$FINAL_WORKER_ACTIVE"
 echo "FINAL_WORKER_ENABLED=$FINAL_WORKER_ENABLED"
 echo "FINAL_DELIVERY_ACTIVE=$FINAL_DELIVERY_ACTIVE"
 echo "FINAL_DELIVERY_ENABLED=$FINAL_DELIVERY_ENABLED"
+echo "DISPATCH_WORKER_ACTIVE=$DISPATCH_WORKER_ACTIVE"
+echo "DISPATCH_WORKER_ENABLED=$DISPATCH_WORKER_ENABLED"
+echo "DISPATCH_DELIVERY_ACTIVE=$DISPATCH_DELIVERY_ACTIVE"
+echo "DISPATCH_DELIVERY_ENABLED=$DISPATCH_DELIVERY_ENABLED"
 echo "NGINX_ACTIVE=$NGINX_ACTIVE"
 echo "NGINX_ENABLED=$NGINX_ENABLED"
 
@@ -255,7 +267,11 @@ if [ "$WORKER_ACTIVE" != "inactive" ] || \
    [ "$FINAL_WORKER_ACTIVE" != "inactive" ] || \
    [ "$FINAL_WORKER_ENABLED" != "disabled" ] || \
    [ "$FINAL_DELIVERY_ACTIVE" != "inactive" ] || \
-   [ "$FINAL_DELIVERY_ENABLED" != "disabled" ]; then
+   [ "$FINAL_DELIVERY_ENABLED" != "disabled" ] || \
+   [ "$DISPATCH_WORKER_ACTIVE" != "inactive" ] || \
+   [ "$DISPATCH_WORKER_ENABLED" != "disabled" ] || \
+   [ "$DISPATCH_DELIVERY_ACTIVE" != "inactive" ] || \
+   [ "$DISPATCH_DELIVERY_ENABLED" != "disabled" ]; then
     FAIL=1
 fi
 
@@ -288,7 +304,7 @@ echo "===== CONCLUSION ====="
 if [ "$FAIL" -eq 0 ]; then
     echo "PASS: RFID Bridge installation is healthy."
     echo "PASS: Web and Nginx are operational."
-    echo "PASS: Legacy and final RFID worker services remain disabled and inactive."
+    echo "PASS: Legacy, Receiving final, and Dispatch final RFID worker services remain disabled and inactive."
     echo "PASS: Reader and Odoo contact remain blocked."
     echo "HOLD: Commission each target reader/Odoo environment before enabling final workers."
 else

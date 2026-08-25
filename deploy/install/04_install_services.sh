@@ -12,6 +12,8 @@ WEB_UNIT="rfid-bridge-web.service"
 WORKER_UNIT="rfid-bridge-worker.service"
 FINAL_WORKER_UNIT="rfid-final-worker.service"
 FINAL_DELIVERY_UNIT="rfid-final-delivery.service"
+DISPATCH_WORKER_UNIT="rfid-final-dispatch-worker.service"
+DISPATCH_DELIVERY_UNIT="rfid-final-dispatch-delivery.service"
 NGINX_SITE="rfid-bridge"
 SERVER_NAMES="${RFID_BRIDGE_SERVER_NAMES:-$(hostname) 127.0.0.1}"
 
@@ -27,6 +29,8 @@ for FILE in \
     "$APP_DIR/deploy/systemd/$WORKER_UNIT" \
     "$APP_DIR/deploy/systemd/$FINAL_WORKER_UNIT" \
     "$APP_DIR/deploy/systemd/$FINAL_DELIVERY_UNIT" \
+    "$APP_DIR/deploy/systemd/$DISPATCH_WORKER_UNIT" \
+    "$APP_DIR/deploy/systemd/$DISPATCH_DELIVERY_UNIT" \
     "$APP_DIR/deploy/nginx/$NGINX_SITE"
 do
     if [ ! -f "$FILE" ]; then
@@ -66,13 +70,29 @@ install \
     "$APP_DIR/deploy/systemd/$FINAL_DELIVERY_UNIT" \
     "/etc/systemd/system/$FINAL_DELIVERY_UNIT"
 
+install \
+    -o root \
+    -g root \
+    -m 0644 \
+    "$APP_DIR/deploy/systemd/$DISPATCH_WORKER_UNIT" \
+    "/etc/systemd/system/$DISPATCH_WORKER_UNIT"
+
+install \
+    -o root \
+    -g root \
+    -m 0644 \
+    "$APP_DIR/deploy/systemd/$DISPATCH_DELIVERY_UNIT" \
+    "/etc/systemd/system/$DISPATCH_DELIVERY_UNIT"
+
 systemctl daemon-reload
 
 systemd-analyze verify \
     "/etc/systemd/system/$WEB_UNIT" \
     "/etc/systemd/system/$WORKER_UNIT" \
     "/etc/systemd/system/$FINAL_WORKER_UNIT" \
-    "/etc/systemd/system/$FINAL_DELIVERY_UNIT"
+    "/etc/systemd/system/$FINAL_DELIVERY_UNIT" \
+    "/etc/systemd/system/$DISPATCH_WORKER_UNIT" \
+    "/etc/systemd/system/$DISPATCH_DELIVERY_UNIT"
 
 echo
 echo "===== 2. INSTALL NGINX SITE ====="
@@ -101,6 +121,8 @@ echo "===== 3. SERVICE ACTIVATION ====="
 systemctl disable --now "$WORKER_UNIT" 2>/dev/null || true
 systemctl disable --now "$FINAL_WORKER_UNIT" 2>/dev/null || true
 systemctl disable --now "$FINAL_DELIVERY_UNIT" 2>/dev/null || true
+systemctl disable --now "$DISPATCH_WORKER_UNIT" 2>/dev/null || true
+systemctl disable --now "$DISPATCH_DELIVERY_UNIT" 2>/dev/null || true
 
 systemctl enable "$WEB_UNIT"
 systemctl restart "$WEB_UNIT"
@@ -140,6 +162,10 @@ echo "FINAL_WORKER_ACTIVE=$(systemctl is-active "$FINAL_WORKER_UNIT")"
 echo "FINAL_WORKER_ENABLED=$(systemctl is-enabled "$FINAL_WORKER_UNIT")"
 echo "FINAL_DELIVERY_ACTIVE=$(systemctl is-active "$FINAL_DELIVERY_UNIT")"
 echo "FINAL_DELIVERY_ENABLED=$(systemctl is-enabled "$FINAL_DELIVERY_UNIT")"
+echo "DISPATCH_WORKER_ACTIVE=$(systemctl is-active "$DISPATCH_WORKER_UNIT")"
+echo "DISPATCH_WORKER_ENABLED=$(systemctl is-enabled "$DISPATCH_WORKER_UNIT")"
+echo "DISPATCH_DELIVERY_ACTIVE=$(systemctl is-active "$DISPATCH_DELIVERY_UNIT")"
+echo "DISPATCH_DELIVERY_ENABLED=$(systemctl is-enabled "$DISPATCH_DELIVERY_UNIT")"
 echo "NGINX_ACTIVE=$(systemctl is-active nginx)"
 echo "NGINX_ENABLED=$(systemctl is-enabled nginx)"
 
@@ -152,4 +178,4 @@ curl \
 
 echo
 echo "PASS: Web and Nginx services are installed."
-echo "PASS: Legacy and final RFID worker services remain disabled and stopped."
+echo "PASS: Legacy, Receiving final, and Dispatch final RFID worker services remain disabled and stopped."

@@ -44,6 +44,15 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument(
+            "--reader-code",
+            default=None,
+            help=(
+                "Override RFID_READER_CODE for this worker instance. "
+                "If omitted, the configured RFID_READER_CODE is used."
+            ),
+        )
+
+        parser.add_argument(
             "--once",
             action="store_true",
             help="Run one control cycle after startup verification.",
@@ -81,9 +90,19 @@ class Command(BaseCommand):
             )
         )
 
+        reader_code = str(
+            options.get("reader_code")
+            or configuration.reader_code
+        ).strip()
+
+        if not reader_code:
+            raise CommandError(
+                "Final RFID reader code cannot be empty."
+            )
+
         try:
             device = ReaderDevice.objects.get(
-                code=configuration.reader_code,
+                code=reader_code,
                 enabled=True,
             )
         except ReaderDevice.DoesNotExist as exc:

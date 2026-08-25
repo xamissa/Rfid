@@ -32,6 +32,16 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument(
+            "--reader-code",
+            default=None,
+            help=(
+                "Override RFID_READER_CODE for this delivery worker "
+                "instance. If omitted, the configured "
+                "RFID_READER_CODE is used."
+            ),
+        )
+
+        parser.add_argument(
             "--once",
             action="store_true",
             help="Run one delivery cycle and exit.",
@@ -88,6 +98,16 @@ class Command(BaseCommand):
             )
         )
 
+        reader_code = str(
+            options.get("reader_code")
+            or final_configuration.reader_code
+        ).strip()
+
+        if not reader_code:
+            raise CommandError(
+                "Final RFID reader code cannot be empty."
+            )
+
         operational = (
             OperationalConfiguration.objects.get(
                 name="default"
@@ -115,9 +135,7 @@ class Command(BaseCommand):
 
         sender = FinalOdooEventSender(
             api_client=api_client,
-            reader_code=(
-                final_configuration.reader_code
-            ),
+            reader_code=reader_code,
         )
 
         self.stdout.write(
@@ -126,7 +144,7 @@ class Command(BaseCommand):
 
         self.stdout.write(
             "RFID_READER_CODE="
-            f"{final_configuration.reader_code}"
+            f"{reader_code}"
         )
 
         self.stdout.write(
@@ -164,9 +182,7 @@ class Command(BaseCommand):
 
                 result = run_final_delivery_cycle(
                     sender=sender,
-                    reader_code=(
-                        final_configuration.reader_code
-                    ),
+                    reader_code=reader_code,
                     batch_size=(
                         operational.worker_batch_size
                     ),
