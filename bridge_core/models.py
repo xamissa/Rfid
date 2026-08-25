@@ -41,6 +41,13 @@ class ReaderDevice(models.Model):
     read_timeout_seconds = models.PositiveSmallIntegerField(default=5)
     reconnect_delay_seconds = models.PositiveSmallIntegerField(default=5)
     enabled = models.BooleanField(default=False)
+    shared_operations = models.BooleanField(
+        default=False,
+        help_text=(
+            "Allow this physical reader to serve both Receiving and "
+            "Dispatch sessions. Keep disabled for dedicated readers."
+        ),
+    )
     notes = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

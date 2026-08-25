@@ -32,6 +32,7 @@ class OdooRFIDCommand:
     command: RuntimeCommand
     revision: int
     picking: str = ""
+    operation: str | None = None
 
     @classmethod
     def from_payload(cls, payload):
@@ -52,6 +53,20 @@ class OdooRFIDCommand:
         picking = str(
             payload.get("picking") or ""
         ).strip()
+
+        raw_operation = str(
+            payload.get("operation") or ""
+        ).strip()
+
+        if raw_operation:
+            if raw_operation not in ("receipt", "dispatch"):
+                raise RuntimeStateError(
+                    "RFID command operation must be "
+                    "'receipt' or 'dispatch'."
+                )
+            operation = raw_operation
+        else:
+            operation = None
 
         if not session_key:
             raise RuntimeStateError(
@@ -88,6 +103,7 @@ class OdooRFIDCommand:
             command=command,
             revision=revision,
             picking=picking,
+            operation=operation,
         )
 
 

@@ -57,7 +57,10 @@ def assign_event_to_active_session(*, event_id):
                 "Reader device has an unsupported assignment role."
             )
 
-        if session.operation_type != expected_operation:
+        if (
+            not event.device.shared_operations
+            and session.operation_type != expected_operation
+        ):
             raise ValueError(
                 "Active RFID session operation is incompatible "
                 "with the reader device role."

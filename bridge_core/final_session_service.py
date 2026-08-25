@@ -27,15 +27,42 @@ class SessionSyncResult:
     reused: bool
 
 
-def _operation_for_reader(reader):
-    operation = _OPERATION_BY_ROLE.get(reader.role)
+def _operation_for_reader(reader, *, requested_operation=None):
+    role_operation = _OPERATION_BY_ROLE.get(reader.role)
 
-    if operation is None:
+    if role_operation is None:
         raise FinalSessionError(
             f"Unsupported RFID reader role: {reader.role!r}"
         )
 
-    return operation
+    requested_operation = str(
+        requested_operation or ""
+    ).strip()
+
+    if not requested_operation:
+        return role_operation
+
+    valid_operations = {
+        RFIDSession.OperationType.RECEIPT,
+        RFIDSession.OperationType.DISPATCH,
+    }
+
+    if requested_operation not in valid_operations:
+        raise FinalSessionError(
+            f"Unsupported RFID session operation: "
+            f"{requested_operation!r}"
+        )
+
+    if reader.shared_operations:
+        return requested_operation
+
+    if requested_operation != role_operation:
+        raise FinalSessionError(
+            "Requested RFID session operation does not match "
+            "the dedicated reader role."
+        )
+
+    return role_operation
 
 
 @transaction.atomic
@@ -62,7 +89,10 @@ def synchronize_start_command(
             f"Enabled RFID reader not found: {command.reader_code}"
         ) from exc
 
-    operation = _operation_for_reader(reader)
+    operation = _operation_for_reader(
+        reader,
+        requested_operation=command.operation,
+    )
 
     existing = (
         RFIDSession.objects
@@ -81,7 +111,8 @@ def synchronize_start_command(
 
         if existing.operation_type != operation:
             raise FinalSessionError(
-                "Existing local session operation does not match reader role."
+                "Existing local session operation does not match "
+                "the requested operation."
             )
 
         if existing.status != RFIDSession.Status.ACTIVE:
