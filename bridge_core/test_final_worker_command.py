@@ -333,6 +333,7 @@ class FinalWorkerReaderOverrideTests(TestCase):
 
         executor = Mock()
         executor.is_active = False
+        executor.poll_tag_frames.return_value = ()
         mocked_executor_class.return_value = executor
 
         worker = Mock()
@@ -357,7 +358,9 @@ class FinalWorkerReaderOverrideTests(TestCase):
             device=dispatch,
         )
 
-        executor.verify_idle.assert_called_once_with()
+        self.assertGreaterEqual(executor.verify_idle.call_count, 2)
+        executor.start.assert_called_once()
+        executor.stop.assert_called_once()
 
         self.assertIn(
             "RFID_READER_CODE=dispatch-door-01",

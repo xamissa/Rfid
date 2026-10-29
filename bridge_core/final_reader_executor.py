@@ -341,7 +341,7 @@ class PersistentActiveReaderExecutor:
         finally:
             self.close()
 
-    def poll_tag_frames(self):
+    def poll_tag_frames(self, *, timeout_seconds=None):
         pending = self.take_pending_tag_frames()
 
         if pending:
@@ -350,16 +350,24 @@ class PersistentActiveReaderExecutor:
         if not self.is_active:
             return ()
 
+        receive_options = {}
+        if timeout_seconds is not None:
+            receive_options["timeout_seconds"] = timeout_seconds
         frames = self._session.receive(
             expected_commands=(COMMAND_ACTIVE_TAG,),
             maximum_reads=32,
             timeout_returns_empty=True,
+            **receive_options,
         )
 
         for frame in frames:
             self._capture_tag_frame(frame)
 
         return self.take_pending_tag_frames()
+
+    @property
+    def has_partial_frame(self):
+        return bool(self._session and self._session.has_partial_frame)
 
     def take_pending_tag_frames(self):
         frames = tuple(self._pending_tag_frames)

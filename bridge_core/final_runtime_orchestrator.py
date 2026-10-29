@@ -94,6 +94,13 @@ class FinalRuntimeOrchestrator:
         return tuple(results)
 
     def process_command(self, command):
+        if (hasattr(self.reader_executor, "window_error")
+                and command.command != RuntimeCommand.ABORT):
+            try:
+                self.reader_executor.require_healthy()
+            except Exception as exc:
+                self.runtime = self.runtime.mark_degraded(str(exc))
+                return self._reject_command(command=command, message=str(exc))
         try:
             transition = self.runtime.plan_command(command)
         except RuntimeStateError as exc:
@@ -158,6 +165,10 @@ class FinalRuntimeOrchestrator:
                 session_key=command.session_key,
                 reader_code=command.reader_code,
             )
+
+        if (hasattr(self.reader_executor, "window_error")
+                and command.command != RuntimeCommand.ABORT):
+            self.reader_executor.require_healthy()
 
         ack_result = self.api_client.ack(
             session_key=command.session_key,
@@ -453,7 +464,12 @@ class FinalRuntimeOrchestrator:
                     reader_code=command.reader_code,
                 )
 
-            if self.reader_executor.is_active:
+            if hasattr(self.reader_executor, "abort_window"):
+                self.reader_executor.abort_window(
+                    session_key=command.session_key,
+                    reader_code=command.reader_code,
+                )
+            elif self.reader_executor.is_active:
                 self.reader_executor.stop(
                     session_key=command.session_key,
                     reader_code=command.reader_code,

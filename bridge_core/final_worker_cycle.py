@@ -173,7 +173,17 @@ class FinalWorkerCycle:
         tags_duplicate = 0
         tags_assigned = 0
 
-        self.require_capture_healthy()
+        if hasattr(self.reader_executor, "window_error"):
+            try:
+                self.require_capture_healthy()
+            except Exception as exc:
+                self.orchestrator.runtime = self.orchestrator.runtime.mark_degraded(str(exc))
+            else:
+                if (self.orchestrator.runtime.state == RuntimeState.DEGRADED
+                        and not self.orchestrator.runtime.session_key):
+                    self.orchestrator.mark_reader_verified_idle()
+        else:
+            self.require_capture_healthy()
 
         self.orchestrator.heartbeat()
         heartbeat_sent = True
@@ -219,7 +229,8 @@ class FinalWorkerCycle:
                     tags_duplicate += pending_result.duplicate_count
                     tags_assigned += pending_result.assigned_count
 
-        self.require_capture_healthy()
+        if not hasattr(self.reader_executor, "window_error"):
+            self.require_capture_healthy()
 
         return FinalWorkerCycleResult(
             heartbeat_sent=heartbeat_sent,

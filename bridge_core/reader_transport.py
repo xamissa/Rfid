@@ -1,5 +1,7 @@
 from dataclasses import dataclass
 import socket
+import math
+import time
 from typing import Callable
 
 from bridge_core.reader_protocol import (
@@ -97,6 +99,11 @@ class TCPReaderSession:
     def is_open(self) -> bool:
         return self._socket is not None
 
+    @property
+    def has_partial_frame(self) -> bool:
+        """Whether a fragmented frame is waiting for more bytes (read-only)."""
+        return bool(self._decoder.pending_bytes)
+
     def close(self) -> None:
         if self._socket is not None:
             self._socket.close()
@@ -126,6 +133,7 @@ class TCPReaderSession:
         expected_commands: tuple[int, ...],
         maximum_reads: int = 32,
         timeout_returns_empty: bool = False,
+        timeout_seconds: float | None = None,
     ) -> tuple[RFIDFrame, ...]:
         if self._socket is None:
             raise RFIDTransportError(
@@ -142,10 +150,21 @@ class TCPReaderSession:
                 "Maximum reads must be at least one."
             )
 
+        if timeout_seconds is not None and (
+                not math.isfinite(timeout_seconds) or timeout_seconds <= 0):
+            raise RFIDTransportError("Receive budget must be finite and positive.")
+        deadline = (time.monotonic() + timeout_seconds
+                    if timeout_seconds is not None else None)
         matched_frames = []
 
         try:
             for _ in range(maximum_reads):
+                if deadline is not None:
+                    remaining = deadline - time.monotonic()
+                    if remaining <= 0:
+                        raise socket.timeout("Receive budget expired")
+                    self._socket.settimeout(min(
+                        self._connection.read_timeout_seconds, remaining))
                 chunk = self._socket.recv(self._receive_size)
 
                 if not chunk:
@@ -168,6 +187,10 @@ class TCPReaderSession:
             raise RFIDTransportError(
                 f"RFID TCP receive failed: {exc}"
             ) from exc
+
+        finally:
+            if deadline is not None:
+                self._socket.settimeout(self._connection.read_timeout_seconds)
 
         if self._decoder.pending_bytes:
             raise RFIDTransportError(

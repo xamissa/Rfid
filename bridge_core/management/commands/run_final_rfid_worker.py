@@ -7,9 +7,7 @@ from django.core.management.base import (
     CommandError,
 )
 
-from bridge_core.final_capture_service import (
-    FinalCaptureService,
-)
+from bridge_core.final_reader_supervisor import ContinuousReaderSupervisor
 from bridge_core.final_reader_executor import (
     PersistentActiveReaderExecutor,
 )
@@ -134,11 +132,11 @@ class Command(BaseCommand):
             )
         )
 
-        capture_service = FinalCaptureService(
-            reader_executor=reader_executor,
-            device=device,
+        reader_executor = ContinuousReaderSupervisor(
+            physical=reader_executor, device=device,
             tag_ingestor=ingest_final_active_tag_frames,
         )
+        capture_service = reader_executor
 
         orchestrator = FinalRuntimeOrchestrator(
             api_client=api_client,
@@ -151,14 +149,6 @@ class Command(BaseCommand):
             reader_executor=reader_executor,
             device=device,
             capture_service=capture_service,
-        )
-
-        orchestrator.after_reader_start = (
-            worker.start_capture
-        )
-
-        orchestrator.before_reader_stop = (
-            worker.stop_capture
         )
 
         orchestrator.before_session_close = (
@@ -175,7 +165,7 @@ class Command(BaseCommand):
 
         # Always establish a physically safe idle state before deciding
         # whether a stale local session requires operator recovery.
-        reader_executor.verify_idle()
+        reader_executor.physical.verify_idle()
 
         existing_active = RFIDSession.objects.filter(
             device=device,
@@ -203,6 +193,8 @@ class Command(BaseCommand):
         self.stdout.write(
             f"POLL_SECONDS={configuration.poll_seconds}"
         )
+
+        reader_executor.start_monitoring()
 
         cycle_number = 0
         interrupted = False
@@ -322,6 +314,11 @@ class Command(BaseCommand):
         worker,
         reader_code,
     ):
+        if isinstance(reader_executor, ContinuousReaderSupervisor):
+            had_window = reader_executor.is_active
+            reader_executor.shutdown()
+            return had_window
+
         if not reader_executor.is_active:
             worker.stop_capture()
             reader_executor.close()
