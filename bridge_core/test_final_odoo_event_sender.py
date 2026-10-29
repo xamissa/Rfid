@@ -29,12 +29,14 @@ class FakeApiClient:
         session_key,
         reader_code,
         events,
+        observation_ledger_managed=None,
     ):
         self.calls.append(
             {
                 "session_key": session_key,
                 "reader_code": reader_code,
                 "events": list(events),
+                "observation_ledger_managed": observation_ledger_managed,
             }
         )
 
@@ -115,6 +117,7 @@ class FinalOdooEventSenderTests(TestCase):
         )
 
         call = self.api.calls[0]
+        self.assertIs(call["observation_ledger_managed"], True)
 
         self.assertEqual(
             call["session_key"],
@@ -208,3 +211,21 @@ class FinalOdooEventSenderTests(TestCase):
             self.sender.send_event(
                 event=self.event
             )
+
+    def test_final_sender_serializes_real_request_boolean(self):
+        import json
+        from bridge_core.odoo_api_v1 import OdooRFIDApiClient
+        from bridge_core.test_odoo_api_v1 import RecordingOpenerFactory
+        factory = RecordingOpenerFactory({'result': self.response('accepted')})
+        client = OdooRFIDApiClient(base_url='https://offline.invalid',
+            bearer_token='offline-placeholder', gateway_code='gateway', opener_factory=factory)
+        sender = FinalOdooEventSender(api_client=client, reader_code=self.reader.code)
+        result = sender.send_event(event=self.event)
+        self.assertEqual(result.outcome, DeliveryAttempt.Outcome.SENT)
+        request = factory.opener.requests[0]['request']
+        params = json.loads(request.data)['params']
+        self.assertIs(params['observation_ledger_managed'], True)
+        self.assertIn(b'"observation_ledger_managed":true', request.data)
+        self.assertNotIn('observation_ledger_managed', params['events'][0])
+        self.assertEqual(params['events'][0]['event_uuid'], str(self.event.event_id))
+        self.assertEqual(params['events'][0]['raw_read_count'], 1)

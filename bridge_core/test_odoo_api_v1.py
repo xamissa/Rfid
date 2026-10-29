@@ -243,6 +243,22 @@ class OdooRFIDApiClientTests(TestCase):
             1,
         )
 
+    def test_events_legacy_default_omits_observation_flag(self):
+        client, factory = self.build_client({'result': {'ok': True}})
+        client.events(session_key='one', reader_code='reader', events=[])
+        self.assertNotIn('observation_ledger_managed', self.decode_request(factory)[2]['params'])
+
+    def test_events_flag_requires_real_boolean(self):
+        client, factory = self.build_client({'result': {'ok': True}})
+        for invalid in ('true', 'false', 1, 0):
+            with self.subTest(value=invalid), self.assertRaises(ValueError):
+                client.events(session_key='one', reader_code='reader', events=[],
+                              observation_ledger_managed=invalid)
+        self.assertEqual(factory.opener.requests, [])
+        client.events(session_key='one', reader_code='reader', events=[],
+                      observation_ledger_managed=False)
+        self.assertIs(self.decode_request(factory)[2]['params']['observation_ledger_managed'], False)
+
     def test_requires_https(self):
         with self.assertRaises(
             OdooRFIDApiConfigurationError

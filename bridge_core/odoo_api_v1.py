@@ -19,7 +19,11 @@ class OdooRFIDApiConfigurationError(OdooRFIDApiError):
 
 
 class OdooRFIDApiTransportError(OdooRFIDApiError):
-    """Raised when HTTP transport to Odoo fails."""
+    """Transport error with safe HTTP metadata for observation retry policy."""
+    def __init__(self, message, *, status_code=None, retry_after=None):
+        super().__init__(message)
+        self.status_code = status_code
+        self.retry_after = retry_after
 
 
 class OdooRFIDApiProtocolError(OdooRFIDApiError):
@@ -181,7 +185,8 @@ class OdooRFIDApiClient:
                 raw_body = response.read()
         except HTTPError as exc:
             raise OdooRFIDApiTransportError(
-                f"Odoo RFID API returned HTTP {exc.code}."
+                f"Odoo RFID API returned HTTP {exc.code}.",
+                status_code=exc.code, retry_after=exc.headers.get("Retry-After") if exc.headers else None,
             ) from exc
         except URLError as exc:
             raise OdooRFIDApiTransportError(
@@ -308,21 +313,23 @@ class OdooRFIDApiClient:
         session_key,
         reader_code,
         events,
+        observation_ledger_managed=None,
     ):
-        response = self._post(
-            endpoint=self.EVENTS_ENDPOINT,
-            params={
-                "gateway_code": self.gateway_code,
-                "session_key": _require_non_empty(
-                    "RFID session key",
-                    session_key,
-                ),
-                "reader_code": _require_non_empty(
-                    "RFID reader code",
-                    reader_code,
-                ),
-                "events": list(events),
-            },
-        )
+        # Omit by default for older/non-ledger callers; never coerce strings.
+        if observation_ledger_managed is not None and type(observation_ledger_managed) is not bool:
+            raise ValueError('observation_ledger_managed must be a boolean or None.')
+        params = {
+            "gateway_code": self.gateway_code,
+            "session_key": _require_non_empty("RFID session key", session_key),
+            "reader_code": _require_non_empty("RFID reader code", reader_code),
+            "events": list(events),
+        }
+        if observation_ledger_managed is not None:
+            params["observation_ledger_managed"] = observation_ledger_managed
+        return self._post(endpoint=self.EVENTS_ENDPOINT, params=params).result
 
-        return response.result
+    def observations(self, *, reader_code, observations):
+        return self._post(endpoint='/api/rfid/v1/observations', params={
+            'gateway_code': self.gateway_code, 'reader_code': reader_code,
+            'schema_version': 1, 'observations': list(observations),
+        }).result

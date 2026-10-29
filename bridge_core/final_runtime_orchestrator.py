@@ -233,6 +233,11 @@ class FinalRuntimeOrchestrator:
                 command=command,
             )
 
+            if hasattr(self.reader_executor, 'set_window_metadata'):
+                self.reader_executor.set_window_metadata(
+                    operation=session_sync.session.operation_type,
+                    revision=command.revision,
+                )
             self.reader_executor.start(
                 session_key=command.session_key,
                 reader_code=command.reader_code,

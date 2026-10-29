@@ -392,3 +392,85 @@ class OperationalConfiguration(models.Model):
         from bridge_core.credential_crypto import decrypt_credential
 
         return decrypt_credential(self.odoo_secret_encrypted)
+
+
+class RFIDObservation(models.Model):
+    """Durable open aggregate; capture fields freeze on finalization."""
+    event_uuid = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    device = models.ForeignKey(ReaderDevice, on_delete=models.PROTECT)
+    epc = models.CharField(max_length=510)
+    antenna = models.PositiveSmallIntegerField(null=True)
+    # -1 represents unknown only in the uniqueness key; wire antenna stays null.
+    antenna_key = models.SmallIntegerField(default=-1)
+    first_seen_at = models.DateTimeField()
+    last_seen_at = models.DateTimeField()
+    raw_read_count = models.PositiveBigIntegerField(default=1)
+    status = models.CharField(max_length=16, default='open', choices=[('open', 'Open'), ('finalized', 'Finalized')])
+    finalized_at = models.DateTimeField(null=True)
+    finalization_reason = models.CharField(max_length=32, blank=True)
+    context_kind = models.CharField(max_length=16, choices=[(v, v) for v in ('receipt', 'delivery', 'no_transfer', 'unresolved')])
+    session_key = models.CharField(max_length=128, null=True)
+    operation = models.CharField(max_length=16, null=True)
+    context_generation_uuid = models.UUIDField()
+    connection_epoch_uuid = models.UUIDField()
+    capture_run_uuid = models.UUIDField()
+    context_reason = models.CharField(max_length=64)
+    related_session_key = models.CharField(max_length=128, null=True)
+    command_revision = models.PositiveBigIntegerField(null=True)
+    diagnostic_metadata = models.JSONField(default=dict)
+    frozen_payload = models.JSONField(null=True)
+    payload_hash = models.CharField(max_length=64, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(
+            fields=('device', 'epc', 'antenna_key', 'context_generation_uuid', 'connection_epoch_uuid'),
+            condition=models.Q(status='open'), name='unique_open_observation_key'),
+            models.CheckConstraint(condition=models.Q(raw_read_count__gte=1), name='obs_positive_reports'),
+            models.CheckConstraint(condition=(models.Q(antenna__isnull=True, antenna_key=-1) |
+                models.Q(antenna__isnull=False, antenna__lte=255, antenna_key=models.F('antenna'))),
+                name='obs_antenna_key_consistent'),
+            models.CheckConstraint(condition=(models.Q(status='open', finalized_at__isnull=True, frozen_payload__isnull=True) |
+                models.Q(status='finalized', finalized_at__isnull=False, frozen_payload__isnull=False)),
+                name='obs_finalization_consistent')]
+        indexes = [models.Index(fields=('device', 'status'), name='obs_device_status_idx'),
+                   models.Index(fields=('epc', 'first_seen_at'), name='obs_epc_seen_idx'),
+                   models.Index(fields=('session_key',), name='obs_session_idx')]
+
+    def save(self, *args, **kwargs):
+        if self.pk and type(self).objects.filter(pk=self.pk, status='finalized').exists():
+            raise ValueError('Finalized observation is immutable.')
+        super().save(*args, **kwargs)
+
+
+class ObservationOutbox(models.Model):
+    observation = models.OneToOneField(RFIDObservation, on_delete=models.PROTECT)
+    state = models.CharField(max_length=16, default='pending', choices=[(v, v) for v in ('pending', 'leased', 'delivered', 'quarantined')])
+    attempt_count = models.PositiveBigIntegerField(default=0)
+    next_attempt_at = models.DateTimeField()
+    lease_token = models.UUIDField(null=True)
+    lease_owner = models.CharField(max_length=128, blank=True)
+    lease_expires_at = models.DateTimeField(null=True)
+    last_error = models.CharField(max_length=256, blank=True)
+    acknowledged_at = models.DateTimeField(null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        indexes = [models.Index(fields=('state', 'next_attempt_at'), name='obs_outbox_due_idx'),
+                   models.Index(fields=('state', 'lease_expires_at'), name='obs_outbox_lease_idx')]
+
+
+class ObservationDeliveryAttempt(models.Model):
+    outbox = models.ForeignKey(ObservationOutbox, on_delete=models.PROTECT)
+    batch_uuid = models.UUIDField()
+    lease_token = models.UUIDField()
+    attempt_number = models.PositiveBigIntegerField()
+    outcome = models.CharField(max_length=32, default='started')
+    error_kind = models.CharField(max_length=128, blank=True)
+    attempted_at = models.DateTimeField(auto_now_add=True)
+    completed_at = models.DateTimeField(null=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=('outbox', 'attempt_number'), name='unique_obs_attempt')]

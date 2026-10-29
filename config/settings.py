@@ -159,3 +159,12 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 LOGIN_URL = "login"
 LOGIN_REDIRECT_URL = "bridge_core:dashboard"
 LOGOUT_REDIRECT_URL = "login"
+
+# One summary per observation batch; credentials and HTTP bodies are never logged.
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {'operational': {'format': '%(asctime)s level=%(levelname)s logger=%(name)s %(message)s'}},
+    'handlers': {'operational': {'class': 'logging.StreamHandler', 'formatter': 'operational'}},
+    'loggers': {'bridge_core': {'handlers': ['operational'], 'level': 'INFO', 'propagate': False}},
+}

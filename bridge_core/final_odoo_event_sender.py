@@ -111,6 +111,7 @@ class FinalOdooEventSender:
                 session_key=session_key,
                 reader_code=self.reader_code,
                 events=[payload],
+                observation_ledger_managed=True,
             )
         except OdooRFIDApiError as exc:
             return FinalOdooEventSenderResult(

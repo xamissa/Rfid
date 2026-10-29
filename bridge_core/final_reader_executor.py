@@ -44,6 +44,8 @@ class PersistentActiveReaderExecutor:
         self._session = None
         self._active_session_key = None
         self._pending_tag_frames = []
+        self.observation_sink = None
+        self.observation_connection_sink = None
 
         self._validate_device()
 
@@ -112,6 +114,18 @@ class PersistentActiveReaderExecutor:
 
         self._pending_tag_frames.append(frame)
 
+    def set_observation_sink(self, sink, *, connection_sink=None):
+        self.observation_sink = sink
+        self.observation_connection_sink = connection_sink
+
+    def _capture_tag_frames(self, frames):
+        tags = tuple(frame for frame in frames if frame.command == COMMAND_ACTIVE_TAG)
+        # Observe the whole returned batch before interpreting a control ACK.
+        if tags and self.observation_sink is not None:
+            self.observation_sink(tags)
+        for frame in tags:
+            self._capture_tag_frame(frame)
+
     def _wait_for_start_response(self):
         for _ in range(32):
             frames = self._session.receive(
@@ -126,11 +140,11 @@ class PersistentActiveReaderExecutor:
             if not frames:
                 continue
 
+            self._capture_tag_frames(frames)
             for frame in frames:
                 self._validate_frame_address(frame)
 
                 if frame.command == COMMAND_ACTIVE_TAG:
-                    self._capture_tag_frame(frame)
                     continue
 
                 if frame.command != COMMAND_START_INVENTORY:
@@ -152,6 +166,7 @@ class PersistentActiveReaderExecutor:
         )
 
     def _wait_for_stop_response(self):
+        observation_error = None
         for _ in range(32):
             frames = self._session.receive(
                 expected_commands=(
@@ -165,11 +180,14 @@ class PersistentActiveReaderExecutor:
             if not frames:
                 continue
 
+            try:
+                self._capture_tag_frames(frames)
+            except Exception as exc:
+                observation_error = exc
             for frame in frames:
                 self._validate_frame_address(frame)
 
                 if frame.command == COMMAND_ACTIVE_TAG:
-                    self._capture_tag_frame(frame)
                     continue
 
                 if frame.command != COMMAND_STOP:
@@ -181,6 +199,8 @@ class PersistentActiveReaderExecutor:
                         f"with status {frame.status}."
                     )
 
+                if observation_error is not None:
+                    raise observation_error
                 return frame
 
         raise FinalReaderExecutorError(
@@ -202,9 +222,15 @@ class PersistentActiveReaderExecutor:
         transport = self._build_transport()
         session_context = transport.open_session()
         session = None
+        observation_error = None
 
         try:
             session = session_context.__enter__()
+            if self.observation_connection_sink is not None:
+                try:
+                    self.observation_connection_sink()
+                except Exception as exc:
+                    observation_error = exc
 
             stop_request = build_frame(
                 address=self.device.device_address,
@@ -216,7 +242,7 @@ class PersistentActiveReaderExecutor:
 
             for _ in range(32):
                 frames = session.receive(
-                    expected_commands=(COMMAND_STOP,),
+                    expected_commands=(COMMAND_STOP, COMMAND_ACTIVE_TAG),
                     maximum_reads=32,
                     timeout_returns_empty=True,
                 )
@@ -224,6 +250,10 @@ class PersistentActiveReaderExecutor:
                 if not frames:
                     continue
 
+                try:
+                    self._capture_tag_frames(frames)
+                except Exception as exc:
+                    observation_error = exc
                 for frame in frames:
                     self._validate_frame_address(frame)
 
@@ -236,6 +266,8 @@ class PersistentActiveReaderExecutor:
                             f"with status {frame.status}."
                         )
 
+                    if observation_error is not None:
+                        raise observation_error
                     return
 
             raise FinalReaderExecutorError(
@@ -278,6 +310,8 @@ class PersistentActiveReaderExecutor:
 
         try:
             self._session = session_context.__enter__()
+            if self.observation_connection_sink is not None:
+                self.observation_connection_sink()
 
             start_request = build_frame(
                 address=self.device.device_address,
@@ -360,8 +394,7 @@ class PersistentActiveReaderExecutor:
             **receive_options,
         )
 
-        for frame in frames:
-            self._capture_tag_frame(frame)
+        self._capture_tag_frames(frames)
 
         return self.take_pending_tag_frames()
 

@@ -121,3 +121,15 @@ The package is ready for handover only when:
 The repository contains the implementation that has passed the Receiving POC on the commissioned staging environment.
 
 This does not mean an arbitrary new Pi, reader, Odoo database, or Dispatch door is automatically commissioned. Each target deployment must still be configured and verified before external integrations are enabled.
+
+
+## Observation ledger rollout
+
+For an observation-enabled deployment, complete the approved
+[permanent observation deployment prerequisites](PERMANENT_OBSERVATIONS.md#deployment-prerequisites--approval-required):
+apply migration 0016, deploy the updated single capture worker, retain transactional
+final delivery, and install/enable the additional `rfid-observation-delivery.service`
+from repository source. It uses existing configuration/credentials and may drain
+backlog independently of capture. The generic service installer does not yet install
+this additional unit. No live contact or service changes are authorized until the
+rollout is explicitly approved.

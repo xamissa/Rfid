@@ -7,6 +7,8 @@ from django.core.management.base import (
     CommandError,
 )
 
+from bridge_core.observation_capture import ObservationCapture
+from bridge_core.observation_config import ObservationConfig
 from bridge_core.final_reader_supervisor import ContinuousReaderSupervisor
 from bridge_core.final_reader_executor import (
     PersistentActiveReaderExecutor,
@@ -132,9 +134,13 @@ class Command(BaseCommand):
             )
         )
 
+        observation_capture = ObservationCapture(
+            device=device, config=ObservationConfig.load(settings.CONFIGURATION))
+        observation_capture.recover()
         reader_executor = ContinuousReaderSupervisor(
             physical=reader_executor, device=device,
             tag_ingestor=ingest_final_active_tag_frames,
+            observation_capture=observation_capture,
         )
         capture_service = reader_executor
 
