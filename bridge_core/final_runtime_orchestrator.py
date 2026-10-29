@@ -101,6 +101,14 @@ class FinalRuntimeOrchestrator:
             except Exception as exc:
                 self.runtime = self.runtime.mark_degraded(str(exc))
                 return self._reject_command(command=command, message=str(exc))
+            # Health may recover during HTTP polling after the cycle marked an
+            # empty runtime degraded. Apply the same recovery rule as run_once,
+            # before rejecting a fresh START. Never clear an attached window.
+            if (command.command == RuntimeCommand.START
+                    and self.runtime.state == RuntimeState.DEGRADED
+                    and self.runtime.session_key is None
+                    and not self.reader_executor.is_active):
+                self.mark_reader_verified_idle()
         try:
             transition = self.runtime.plan_command(command)
         except RuntimeStateError as exc:

@@ -33,6 +33,9 @@ class FinalOdooEventSender:
     ACCEPTED_OUTCOMES = {
         "accepted",
         "duplicate",
+        # /observations may reconcile the EPC before transactional /events.
+        "duplicate_event",
+        "duplicate_epc",
     }
 
     def __init__(

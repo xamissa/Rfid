@@ -229,3 +229,41 @@ class FinalOdooEventSenderTests(TestCase):
         self.assertNotIn('observation_ledger_managed', params['events'][0])
         self.assertEqual(params['events'][0]['event_uuid'], str(self.event.event_id))
         self.assertEqual(params['events'][0]['raw_read_count'], 1)
+
+    def test_observation_first_idempotent_outcomes_are_normalized_success(self):
+        for outcome in ('duplicate_epc', 'duplicate_event', ' DUPLICATE_EPC ', 'DuPlIcAtE_EvEnT'):
+            with self.subTest(outcome=outcome):
+                self.api.result = self.response(outcome)
+                result = self.sender.send_event(event=self.event)
+                self.assertEqual(result.outcome, DeliveryAttempt.Outcome.SENT)
+                self.assertEqual(result.response_code, outcome.strip().lower())
+
+    def test_genuine_rejections_are_not_idempotent_success(self):
+        for outcome in ('rejected', 'unknown_session', 'wrong_reader', 'invalid_payload',
+                        'conflict', 'integrity_conflict', 'unexpected_outcome'):
+            with self.subTest(outcome=outcome):
+                self.api.result = self.response(outcome)
+                self.assertEqual(self.sender.send_event(event=self.event).outcome,
+                                 DeliveryAttempt.Outcome.REJECTED)
+
+    def test_duplicate_success_still_requires_unique_correlated_uuid(self):
+        for outcome in ('duplicate_epc', 'duplicate_event'):
+            with self.subTest(outcome=outcome):
+                self.api.result = self.response(outcome)
+                self.api.result['results'][0]['event_uuid'] = str(uuid.uuid4())
+                self.assertEqual(self.sender.send_event(event=self.event).outcome,
+                                 DeliveryAttempt.Outcome.RETRY)
+                self.api.result = self.response(outcome)
+                self.api.result['results'] *= 2
+                self.assertEqual(self.sender.send_event(event=self.event).outcome,
+                                 DeliveryAttempt.Outcome.RETRY)
+
+    def test_wrong_reader_and_invalid_session_still_fail_before_sending(self):
+        self.sender.reader_code = 'wrong-reader'
+        with self.assertRaises(FinalOdooEventSenderError):
+            self.sender.send_event(event=self.event)
+        self.sender.reader_code = self.reader.code
+        self.event.rfid_session.external_session_key = ''
+        with self.assertRaises(FinalOdooEventSenderError):
+            self.sender.send_event(event=self.event)
+        self.assertEqual(self.api.calls, [])
