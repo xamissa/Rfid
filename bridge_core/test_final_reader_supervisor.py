@@ -95,7 +95,7 @@ class ContinuousReaderTests(TestCase):
             self.attach()
         self.assertFalse(self.reader.is_active)
 
-    def test_admission_deadline_limits_reads_and_never_attaches_after_expiry(self):
+    def test_admission_deadline_limits_reads_when_reader_remains_busy(self):
         from unittest.mock import Mock
         clock = Mock(side_effect=[10.0, 10.0, 10.2, 10.2, 10.5])
         reader = ContinuousReaderSupervisor(
@@ -104,11 +104,38 @@ class ContinuousReaderTests(TestCase):
             admission_seconds=0.5, receive_seconds=0.25)
         reader.step()
         self.physical.poll_tag_frames.reset_mock()
-        self.physical.poll_tag_frames.side_effect = [('ambient',), ()]
-        with self.assertRaisesRegex(ReaderSupervisorError, 'deadline/batch limit'):
+        self.physical.poll_tag_frames.side_effect = [
+            ('ambient-1',),
+            ('ambient-2',),
+        ]
+        with self.assertRaisesRegex(
+            ReaderSupervisorError,
+            'deadline/batch limit',
+        ):
             reader.start(session_key='one', reader_code='reader')
         self.assertEqual(self.physical.poll_tag_frames.call_count, 2)
         self.assertFalse(reader.is_active)
+        self.assertEqual(reader.state, HardwareState.ACTIVE)
+
+    def test_empty_receive_at_deadline_is_clean_quiet_boundary(self):
+        from unittest.mock import Mock
+        clock = Mock(side_effect=[10.0, 10.0, 10.2, 10.2])
+        reader = ContinuousReaderSupervisor(
+            physical=self.physical, device=self.reader.device,
+            tag_ingestor=self.ingest, monotonic=clock,
+            admission_seconds=0.5, receive_seconds=0.25)
+        reader.step()
+        self.physical.poll_tag_frames.reset_mock()
+        self.physical.poll_tag_frames.side_effect = [
+            ('ambient',),
+            (),
+        ]
+
+        reader.start(session_key='one', reader_code='reader')
+
+        self.assertEqual(self.physical.poll_tag_frames.call_count, 2)
+        self.assertTrue(reader.is_active)
+        self.assertEqual(reader.active_session_key, 'one')
         self.assertEqual(reader.state, HardwareState.ACTIVE)
 
     def test_batch_limit_is_independent_of_clock_progress(self):
@@ -133,6 +160,46 @@ class ContinuousReaderTests(TestCase):
             self.attach()
         lock.acquire.assert_called_once_with(timeout=self.reader.admission_seconds)
         self.physical.poll_tag_frames.assert_not_called()
+
+    def test_health_lock_contention_is_healthy_when_capture_is_active(self):
+        lock = Mock()
+        lock.acquire.return_value = False
+        self.reader._lock = lock
+        self.reader.state = HardwareState.ACTIVE
+        self.reader.error = None
+        self.reader.window_error = None
+
+        self.reader.require_healthy()
+
+        lock.acquire.assert_called_once_with(
+            timeout=self.reader.receive_seconds
+        )
+
+    def test_health_lock_contention_still_fails_for_real_reader_error(self):
+        lock = Mock()
+        lock.acquire.return_value = False
+        self.reader._lock = lock
+        self.reader.state = HardwareState.RECONNECTING
+        self.reader.error = 'connection lost'
+
+        with self.assertRaisesRegex(
+            ReaderSupervisorError,
+            'connection lost',
+        ):
+            self.reader.require_healthy()
+
+    def test_health_lock_contention_still_fails_for_window_error(self):
+        lock = Mock()
+        lock.acquire.return_value = False
+        self.reader._lock = lock
+        self.reader.state = HardwareState.ACTIVE
+        self.reader.window_error = 'business window transport failed'
+
+        with self.assertRaisesRegex(
+            ReaderSupervisorError,
+            'business window transport failed',
+        ):
+            self.reader.require_healthy()
 
     def test_partial_frame_rejects_immediately_without_repeated_timeouts(self):
         self.reader.step()

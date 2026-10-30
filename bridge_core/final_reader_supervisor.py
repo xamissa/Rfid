@@ -207,13 +207,29 @@ class ContinuousReaderSupervisor:
 
     def require_healthy(self):
         # Never wait behind a potentially slow physical reconnect for an ACK.
+        # In always-on mode the healthy capture thread legitimately owns this
+        # lock while receiving. Lock contention alone is therefore not a
+        # hardware failure. Genuine failures publish RECONNECTING/error and,
+        # for an attached business window, window_error.
         if not self._lock.acquire(timeout=self.receive_seconds):
-            raise ReaderSupervisorError('Physical reader busy; health cannot be verified.')
+            if (
+                self.state == HardwareState.ACTIVE
+                and not self.window_error
+                and not self.error
+            ):
+                return
+            raise ReaderSupervisorError(
+                self.window_error
+                or self.error
+                or 'Physical reader health cannot be verified.'
+            )
         try:
             if self.state != HardwareState.ACTIVE or self.window_error:
-                raise ReaderSupervisorError(self.window_error or self.error or
-                                            'Physical reader is offline.')
-
+                raise ReaderSupervisorError(
+                    self.window_error
+                    or self.error
+                    or 'Physical reader is offline.'
+                )
         finally:
             self._lock.release()
 
@@ -244,14 +260,14 @@ class ContinuousReaderSupervisor:
                 if self.physical.has_partial_frame:
                     raise ReaderSupervisorError(
                         'START admission rejected: partial protocol frame.')
-                if self._monotonic() >= deadline:
-                    break
                 if not frames:
                     self._boundary('start', context_kind='receipt' if self._operation == 'receipt' else
                                    'delivery' if self._operation == 'dispatch' else 'unresolved',
                                    session_key=session_key, operation=self._operation)
                     self._session_key = session_key
                     return
+                if self._monotonic() >= deadline:
+                    break
             raise ReaderSupervisorError(
                 'START admission failed: no clean quiet boundary within deadline/batch limit.')
         finally:
